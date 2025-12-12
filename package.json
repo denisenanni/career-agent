@@ -1,0 +1,27 @@
+{
+  "name": "career-agent",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "concurrently \"yarn frontend:dev\" \"yarn backend:dev\"",
+    "frontend:dev": "yarn workspace frontend dev",
+    "backend:dev": "cd backend && source .venv/bin/activate && uvicorn app.main:app --reload --port 8000",
+    "backend:setup": "cd backend && python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt",
+    "scraping:run": "cd scraping && source ../backend/.venv/bin/activate && python -m scrapers.remoteok",
+    "db:up": "docker-compose up -d postgres redis",
+    "db:down": "docker-compose down",
+    "db:migrate": "cd backend && source .venv/bin/activate && alembic upgrade head",
+    "lint": "yarn workspace frontend lint",
+    "build": "yarn workspace frontend build",
+    "tf:init": "cd infrastructure/terraform && terraform init",
+    "tf:plan": "cd infrastructure/terraform && terraform plan",
+    "tf:apply": "cd infrastructure/terraform && terraform apply"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

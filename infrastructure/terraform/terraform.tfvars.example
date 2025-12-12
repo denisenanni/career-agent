@@ -1,0 +1,29 @@
+# Copy this to dev.tfvars or prod.tfvars and fill in values
+# DO NOT COMMIT the filled-in file
+
+environment  = "dev"
+project_name = "career-agent"
+
+# Get from: https://console.neon.tech/app/settings/api-keys
+neon_api_key = ""
+
+# Get from: https://console.upstash.com/account/api
+upstash_email   = ""
+upstash_api_key = ""
+
+# Get from: https://fly.io/user/personal_access_tokens
+fly_api_token = ""
+fly_region    = "fra"
+
+# Get from: https://vercel.com/account/tokens
+vercel_api_token = ""
+vercel_team_id   = null  # Optional, for team accounts
+
+# Get from: https://console.anthropic.com/
+anthropic_api_key = ""
+
+# Generate with: openssl rand -base64 32
+jwt_secret = ""
+
+# Your GitHub repo
+github_repo = "denisenanni/career-agent"
