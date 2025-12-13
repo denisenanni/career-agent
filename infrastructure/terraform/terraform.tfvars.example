@@ -16,7 +16,7 @@ project_name = "career-agent"
 # =============================================================================
 
 # Get your Railway API token from: https://railway.app/account/tokens
-railway_api_token = ""
+#railway_api_token = "0dd9d791b-f657-4b35-898b-dcbe5f415905"
 
 # Database credentials (will be used for PostgreSQL service)
 postgres_db       = "career_agent"
