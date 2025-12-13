@@ -1,0 +1,43 @@
+"""
+Profile-related schemas for CV upload and user profile management
+"""
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from datetime import datetime
+
+
+class ProfileUpdate(BaseModel):
+    """Profile update request"""
+    full_name: Optional[str] = None
+    bio: Optional[str] = Field(None, max_length=1000)
+    skills: Optional[List[str]] = None
+    experience_years: Optional[int] = Field(None, ge=0, le=70)
+    preferences: Optional[dict] = None
+
+
+class CVUploadResponse(BaseModel):
+    """CV upload response"""
+    filename: str
+    file_size: int
+    content_type: str
+    cv_text_length: int
+    uploaded_at: datetime
+    message: str
+
+
+class ProfileResponse(BaseModel):
+    """User profile response"""
+    id: int
+    email: str
+    full_name: Optional[str]
+    bio: Optional[str]
+    skills: List[str]
+    experience_years: Optional[int]
+    preferences: dict
+    cv_filename: Optional[str]
+    cv_uploaded_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

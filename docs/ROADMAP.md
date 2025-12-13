@@ -213,6 +213,7 @@ CREATE INDEX idx_matches_score ON matches(match_score DESC);
 ### Auth
 - `POST /auth/register` - Create account
 - `POST /auth/login` - Login (JWT)
+- `POST /auth/logout` - Logout
 
 ### Profile
 - `GET /api/profile` - Get user profile
@@ -270,11 +271,12 @@ CREATE INDEX idx_matches_score ON matches(match_score DESC);
 ### Phase 3: Profile & CV Parsing (Days 6-8)
 
 **Tasks:**
-1. CV upload endpoint (PDF, DOCX, TXT)
-2. Text extraction (pypdf, python-docx)
-3. LLM parsing with Claude Haiku
-4. Preferences storage
-5. Profile UI (upload, parsed view, preferences form)
+1. Auth endpoints (register, login, JWT)
+2. CV upload endpoint (PDF, DOCX, TXT)
+3. Text extraction (pypdf, python-docx)
+4. LLM parsing with Claude Haiku
+5. Preferences storage
+6. Profile UI (upload, parsed view, preferences form)
 
 **LLM Prompt - CV Parsing:**
 ```
@@ -312,6 +314,7 @@ CV Text:
 ```
 
 **Deliverables:**
+- [ ] Register/login/logout
 - [ ] CV upload working
 - [ ] LLM parsing working
 - [ ] Profile UI complete

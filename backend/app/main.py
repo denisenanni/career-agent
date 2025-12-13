@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.config import settings
-from app.routers import jobs, profile, matches, health
+from app.routers import jobs, profile, matches, health, auth
 
 
 @asynccontextmanager
@@ -33,6 +33,7 @@ app.add_middleware(
 
 # Routers
 app.include_router(health.router, tags=["health"])
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
 app.include_router(matches.router, prefix="/api/matches", tags=["matches"])
