@@ -1,0 +1,1 @@
+Refactor this code for readability and maintainability. Keep functionality identical.

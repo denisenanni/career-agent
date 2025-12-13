@@ -1,0 +1,1 @@
+Create a React component with TypeScript and Tailwind. Include props interface.

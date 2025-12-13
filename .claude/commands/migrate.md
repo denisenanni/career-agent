@@ -1,0 +1,1 @@
+Create an Alembic migration for the described database change.

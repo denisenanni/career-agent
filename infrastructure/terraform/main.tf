@@ -1,5 +1,5 @@
 # =============================================================================
-# Career Agent Infrastructure
+# Career Agent Infrastructure - Railway + Vercel
 # =============================================================================
 
 locals {
@@ -7,59 +7,121 @@ locals {
 }
 
 # =============================================================================
-# DATABASE - Neon PostgreSQL
+# RAILWAY PROJECT
 # =============================================================================
 
-resource "neon_project" "main" {
-  name      = local.app_name
-  region_id = "aws-eu-central-1"  # Frankfurt
+resource "railway_project" "main" {
+  name = local.app_name
+}
 
-  default_endpoint_settings {
-    autoscaling_limit_min_cu = 0.25
-    autoscaling_limit_max_cu = 1
-    suspend_timeout_seconds  = 300  # 5 min idle timeout (free tier friendly)
+# =============================================================================
+# DATABASE - Railway PostgreSQL
+# =============================================================================
+
+resource "railway_service" "postgres" {
+  project_id = railway_project.main.id
+  name       = "postgres"
+
+  # Use Railway's PostgreSQL template
+  source = {
+    image = "postgres:16-alpine"
   }
 }
 
-resource "neon_database" "main" {
-  project_id = neon_project.main.id
-  branch_id  = neon_project.main.default_branch_id
-  name       = "career_agent"
-  owner_name = neon_project.main.database_user
+# PostgreSQL environment variables
+resource "railway_variable" "postgres_db" {
+  project_id = railway_project.main.id
+  service_id = railway_service.postgres.id
+  name       = "POSTGRES_DB"
+  value      = "career_agent"
+}
+
+resource "railway_variable" "postgres_user" {
+  project_id = railway_project.main.id
+  service_id = railway_service.postgres.id
+  name       = "POSTGRES_USER"
+  value      = "career_agent"
+}
+
+resource "railway_variable" "postgres_password" {
+  project_id = railway_project.main.id
+  service_id = railway_service.postgres.id
+  name       = "POSTGRES_PASSWORD"
+  value      = var.postgres_password
 }
 
 # =============================================================================
-# CACHE - Upstash Redis
+# CACHE - Railway Redis
 # =============================================================================
 
-resource "upstash_redis_database" "main" {
-  database_name = local.app_name
-  region        = "eu-central-1"  # Frankfurt
-  tls           = true
-  eviction      = true
+resource "railway_service" "redis" {
+  project_id = railway_project.main.id
+  name       = "redis"
+
+  # Use Railway's Redis template
+  source = {
+    image = "redis:7-alpine"
+  }
 }
 
 # =============================================================================
-# BACKEND - Fly.io
+# BACKEND - Railway FastAPI Service
 # =============================================================================
 
-resource "fly_app" "backend" {
-  name = "${local.app_name}-api"
-  org  = "personal"  # Change if you have an org
+resource "railway_service" "backend" {
+  project_id = railway_project.main.id
+  name       = "backend"
+
+  # Connect to GitHub repository
+  source = {
+    repo           = var.github_repo
+    branch         = var.github_branch
+    root_directory = "/backend"
+  }
 }
 
-resource "fly_ip" "backend_ipv4" {
-  app  = fly_app.backend.name
-  type = "v4"
+# Backend environment variables
+resource "railway_variable" "backend_database_url" {
+  project_id = railway_project.main.id
+  service_id = railway_service.backend.id
+  name       = "DATABASE_URL"
+  value      = "postgresql://${var.postgres_user}:${var.postgres_password}@${railway_service.postgres.name}.railway.internal:5432/${var.postgres_db}"
 }
 
-resource "fly_ip" "backend_ipv6" {
-  app  = fly_app.backend.name
-  type = "v6"
+resource "railway_variable" "backend_redis_url" {
+  project_id = railway_project.main.id
+  service_id = railway_service.backend.id
+  name       = "REDIS_URL"
+  value      = "redis://${railway_service.redis.name}.railway.internal:6379"
 }
 
-# Note: Actual deployment done via `fly deploy` CLI
-# Terraform sets up the app and IPs
+resource "railway_variable" "backend_anthropic_key" {
+  project_id = railway_project.main.id
+  service_id = railway_service.backend.id
+  name       = "ANTHROPIC_API_KEY"
+  value      = var.anthropic_api_key
+}
+
+resource "railway_variable" "backend_jwt_secret" {
+  project_id = railway_project.main.id
+  service_id = railway_service.backend.id
+  name       = "JWT_SECRET"
+  value      = var.jwt_secret
+}
+
+resource "railway_variable" "backend_environment" {
+  project_id = railway_project.main.id
+  service_id = railway_service.backend.id
+  name       = "ENVIRONMENT"
+  value      = var.environment
+}
+
+resource "railway_variable" "backend_log_level" {
+  project_id = railway_project.main.id
+  service_id = railway_service.backend.id
+  name       = "LOG_LEVEL"
+  value      = var.environment == "production" ? "INFO" : "DEBUG"
+}
 
 # =============================================================================
 # FRONTEND - Vercel
@@ -78,17 +140,17 @@ resource "vercel_project" "frontend" {
 
   build_command    = "yarn build"
   output_directory = "dist"
-
-  environment = [
-    {
-      key    = "VITE_API_URL"
-      value  = "https://${fly_app.backend.name}.fly.dev"
-      target = ["production", "preview"]
-    }
-  ]
 }
 
-# Production domain (optional - uses vercel subdomain by default)
+# Frontend environment variables
+resource "vercel_project_environment_variable" "api_url" {
+  project_id = vercel_project.frontend.id
+  key        = "VITE_API_URL"
+  value      = railway_service.backend.domain
+  target     = ["production", "preview"]
+}
+
+# Production domain (uses Vercel's auto-generated domain)
 resource "vercel_project_domain" "frontend" {
   project_id = vercel_project.frontend.id
   domain     = "${local.app_name}.vercel.app"

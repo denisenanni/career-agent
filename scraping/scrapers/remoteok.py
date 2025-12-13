@@ -90,26 +90,90 @@ def detect_job_type(raw: dict) -> str:
     return "permanent"
 
 
-# CLI for testing
-if __name__ == "__main__":
-    import asyncio
-    
-    async def main():
+async def scrape_and_save() -> dict:
+    """
+    Scrape RemoteOK and save jobs to database with logging.
+
+    Returns:
+        Dictionary with scrape statistics
+    """
+    import sys
+    sys.path.insert(0, "/Users/denisenanni/Documents/MyWorkspace/career-agent/backend")
+
+    from app.database import get_db_session
+    from app.services.scraper import ScraperService
+
+    # Start scrape log
+    with get_db_session() as db:
+        scraper_service = ScraperService(db)
+        scrape_log = scraper_service.create_scrape_log(source="remoteok")
+        scrape_log_id = scrape_log.id
+
+    try:
         print("Fetching jobs from RemoteOK...")
         jobs = await fetch_jobs()
         print(f"Found {len(jobs)} jobs")
-        
-        if jobs:
-            print("\nSample job:")
-            print(json.dumps(jobs[0], indent=2, default=str))
-            
-            # Show salary range if present
-            with_salary = [j for j in jobs if j["salary_min"]]
-            print(f"\nJobs with salary info: {len(with_salary)}")
-            
-            if with_salary:
-                print("Salary ranges:")
-                for job in with_salary[:5]:
-                    print(f"  {job['title']}: ${job['salary_min']:,} - ${job['salary_max']:,}")
-    
+
+        # Save to database
+        with get_db_session() as db:
+            scraper_service = ScraperService(db)
+            stats = scraper_service.save_jobs(jobs, source="remoteok", scrape_log_id=scrape_log_id)
+
+            # Update scrape log with success
+            scraper_service.update_scrape_log(
+                scrape_log_id=scrape_log_id,
+                status="completed",
+                jobs_found=stats["total"],
+                jobs_new=stats["new"],
+            )
+
+        print(f"Saved to database: {stats['new']} new, {stats['updated']} updated")
+        return stats
+
+    except Exception as e:
+        # Update scrape log with error
+        with get_db_session() as db:
+            scraper_service = ScraperService(db)
+            scraper_service.update_scrape_log(
+                scrape_log_id=scrape_log_id,
+                status="failed",
+                error=str(e),
+            )
+        raise
+
+
+# CLI for testing
+if __name__ == "__main__":
+    import asyncio
+    import sys
+
+    async def main():
+        # Check if --save flag is provided
+        save_to_db = "--save" in sys.argv
+
+        if save_to_db:
+            # Scrape and save to database
+            stats = await scrape_and_save()
+            print(f"\nTotal: {stats['total']}, New: {stats['new']}, Updated: {stats['updated']}")
+        else:
+            # Just fetch and display
+            print("Fetching jobs from RemoteOK...")
+            jobs = await fetch_jobs()
+            print(f"Found {len(jobs)} jobs")
+
+            if jobs:
+                print("\nSample job:")
+                print(json.dumps(jobs[0], indent=2, default=str))
+
+                # Show salary range if present
+                with_salary = [j for j in jobs if j["salary_min"]]
+                print(f"\nJobs with salary info: {len(with_salary)}")
+
+                if with_salary:
+                    print("Salary ranges:")
+                    for job in with_salary[:5]:
+                        print(f"  {job['title']}: ${job['salary_min']:,} - ${job['salary_max']:,}")
+
+            print("\nTip: Use --save flag to save jobs to database")
+
     asyncio.run(main())

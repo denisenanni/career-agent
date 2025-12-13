@@ -1,29 +1,51 @@
-# Copy this to dev.tfvars or prod.tfvars and fill in values
-# DO NOT COMMIT the filled-in file
+# =============================================================================
+# Career Agent - Terraform Variables Example
+# =============================================================================
+# Copy this to dev.tfvars or prod.tfvars and fill in your values
+# DO NOT COMMIT the filled-in tfvars file to version control
 
-environment  = "dev"
+# =============================================================================
+# Project Configuration
+# =============================================================================
+
+environment  = "dev"  # or "prod"
 project_name = "career-agent"
 
-# Get from: https://console.neon.tech/app/settings/api-keys
-neon_api_key = ""
+# =============================================================================
+# Railway
+# =============================================================================
 
-# Get from: https://console.upstash.com/account/api
-upstash_email   = ""
-upstash_api_key = ""
+# Get your Railway API token from: https://railway.app/account/tokens
+railway_api_token = ""
 
-# Get from: https://fly.io/user/personal_access_tokens
-fly_api_token = ""
-fly_region    = "fra"
+# Database credentials (will be used for PostgreSQL service)
+postgres_db       = "career_agent"
+postgres_user     = "career_agent"
+postgres_password = ""  # Generate a secure password
 
-# Get from: https://vercel.com/account/tokens
+# =============================================================================
+# Vercel
+# =============================================================================
+
+# Get your Vercel API token from: https://vercel.com/account/tokens
 vercel_api_token = ""
-vercel_team_id   = null  # Optional, for team accounts
 
-# Get from: https://console.anthropic.com/
+# Optional: Vercel team ID (only if using a team account)
+vercel_team_id = null
+
+# =============================================================================
+# Application Secrets
+# =============================================================================
+
+# Get your Anthropic API key from: https://console.anthropic.com/
 anthropic_api_key = ""
 
-# Generate with: openssl rand -base64 32
+# Generate a secure JWT secret with: openssl rand -base64 32
 jwt_secret = ""
 
-# Your GitHub repo
-github_repo = "denisenanni/career-agent"
+# =============================================================================
+# GitHub Repository
+# =============================================================================
+
+github_repo   = "denisenanni/career-agent"
+github_branch = "main"

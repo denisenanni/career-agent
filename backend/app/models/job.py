@@ -1,0 +1,46 @@
+from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Float
+from datetime import datetime
+from app.models import Base
+
+
+class Job(Base):
+    __tablename__ = "jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Source info
+    source = Column(String, nullable=False, index=True)  # remoteok, weworkremotely, etc.
+    source_id = Column(String, nullable=False, unique=True, index=True)
+    url = Column(String, nullable=False)
+
+    # Job details
+    title = Column(String, nullable=False, index=True)
+    company = Column(String, nullable=False, index=True)
+    description = Column(Text, nullable=False)
+
+    # Salary
+    salary_min = Column(Integer, nullable=True)
+    salary_max = Column(Integer, nullable=True)
+    salary_currency = Column(String, default="USD")
+
+    # Location and remote
+    location = Column(String, default="Remote")
+    remote_type = Column(String, default="full")  # full, partial, none
+
+    # Job type
+    job_type = Column(String, default="permanent")  # permanent, contract, part-time
+
+    # Tags/skills
+    tags = Column(JSON, default=list)
+
+    # Timestamps
+    posted_at = Column(DateTime, nullable=True)
+    scraped_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Raw data from source
+    raw_data = Column(JSON, nullable=True)
+
+    def __repr__(self):
+        return f"<Job(id={self.id}, title='{self.title}', company='{self.company}')>"

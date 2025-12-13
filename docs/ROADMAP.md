@@ -1,12 +1,14 @@
-# Career Agent - Roadmap & Architecture
+# Career Agent - Project Plan
 
-## Vision
+## Overview
 
 An AI-powered job hunting assistant that:
 1. Scrapes job boards for relevant postings
 2. Matches jobs against your CV and preferences
 3. Generates tailored cover letters and CV highlights
 4. Tracks applications and provides insights
+
+**Repository:** https://github.com/denisenanni/career-agent
 
 ---
 
@@ -22,7 +24,7 @@ An AI-powered job hunting assistant that:
                                 ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                           BACKEND                                    │
-│                    Python FastAPI (Fly.io)                          │
+│                    Python FastAPI (Railway)                         │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                 │
 │  │  Jobs API   │  │  Match API  │  │ Generate API│                 │
 │  └─────────────┘  └─────────────┘  └─────────────┘                 │
@@ -31,13 +33,13 @@ An AI-powered job hunting assistant that:
          ▼                   ▼                    ▼
 ┌─────────────┐    ┌─────────────────┐    ┌─────────────┐
 │  PostgreSQL │    │   Redis Cache   │    │ Anthropic   │
-│   (Neon)    │    │   (Upstash)     │    │ Claude API  │
+│  (Railway)  │    │   (Railway)     │    │ Claude API  │
 └─────────────┘    └─────────────────┘    └─────────────┘
          ▲
          │
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         SCRAPING WORKER                              │
-│              Python + Playwright (Fly.io separate app)              │
+│                    Python + httpx (same backend)                    │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                 │
 │  │  RemoteOK   │  │ WeWorkRemote│  │  LinkedIn   │                 │
 │  └─────────────┘  └─────────────┘  └─────────────┘                 │
@@ -48,93 +50,132 @@ An AI-powered job hunting assistant that:
 
 ## Tech Stack
 
-| Layer | Technology | Why |
-|-------|------------|-----|
-| Frontend | React + TypeScript + Vite | Your strength, fast dev |
-| Backend | Python FastAPI | LLM ecosystem, async, learning goal |
-| Database | PostgreSQL (Neon) | Free tier, serverless, scales |
-| Cache | Redis (Upstash) | Free tier, serverless |
-| LLM | Anthropic Claude API | MCP experience, quality |
-| Scraping | Playwright | Handles JS-rendered pages |
-| IaC | Terraform | Your experience, portable |
-| Frontend Hosting | Vercel | Free, easy |
-| Backend Hosting | Fly.io | Good free tier, scales |
+| Layer | Technology | Notes |
+|-------|------------|-------|
+| Frontend | React + TypeScript + Vite + Tailwind | Already scaffolded |
+| Backend | Python FastAPI | Already scaffolded |
+| Database | PostgreSQL (Railway) | All-in-one platform |
+| Cache | Redis (Railway) | All-in-one platform |
+| LLM | Anthropic Claude API | Haiku for extraction, Sonnet for generation |
+| Scraping | httpx + Playwright | Start with httpx for APIs |
+| Infrastructure | Terraform | Railway + Vercel providers |
+| Frontend Hosting | Vercel | Free tier |
+| Backend Hosting | Railway | $5/month credit |
 
 ---
 
-## Data Models
+## Infrastructure (Terraform)
 
-### User
+### Providers
+
+```hcl
+terraform {
+  required_providers {
+    railway = {
+      source  = "terraform-community-providers/railway"
+      version = "~> 0.4"
+    }
+    vercel = {
+      source  = "vercel/vercel"
+      version = "~> 1.0"
+    }
+  }
+}
+```
+
+### Railway resources
+
+1. **Project** - `career-agent-dev`
+2. **PostgreSQL service** - Database
+3. **Redis service** - Cache
+4. **Backend service** - FastAPI app (connected to GitHub repo)
+
+### Vercel resources
+
+1. **Project** - Frontend (connected to GitHub repo, root: `/frontend`)
+
+### Environment variables
+
+**Railway Backend Service:**
+- `DATABASE_URL` - Auto-injected from Railway Postgres
+- `REDIS_URL` - Auto-injected from Railway Redis
+- `ANTHROPIC_API_KEY` - From Anthropic console
+- `JWT_SECRET` - Generate with `openssl rand -base64 32`
+- `ENVIRONMENT` - `production`
+
+**Vercel Frontend:**
+- `VITE_API_URL` - Railway backend URL
+
+---
+
+## Database Schema
+
 ```sql
+-- Users (simple for MVP)
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
-```
 
-### CV/Profile
-```sql
+-- Profiles
 CREATE TABLE profiles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   raw_cv_text TEXT,
-  parsed_cv JSONB,  -- structured extraction
+  parsed_cv JSONB,
   skills TEXT[],
   experience_years INTEGER,
-  preferences JSONB,  -- salary, location, remote, contract type
+  preferences JSONB DEFAULT '{}',
   created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  updated_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(user_id)
 );
-```
 
-### Job Posting
-```sql
+-- Jobs
 CREATE TABLE jobs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  source VARCHAR(50) NOT NULL,  -- remoteok, weworkremotely, linkedin
-  source_id VARCHAR(255),  -- original ID from source
+  source VARCHAR(50) NOT NULL,
+  source_id VARCHAR(255) NOT NULL,
   url VARCHAR(500) NOT NULL,
   title VARCHAR(255) NOT NULL,
   company VARCHAR(255),
   description TEXT,
   salary_min INTEGER,
   salary_max INTEGER,
-  salary_currency VARCHAR(10),
+  salary_currency VARCHAR(10) DEFAULT 'USD',
   location VARCHAR(255),
-  remote_type VARCHAR(50),  -- full, hybrid, onsite
-  job_type VARCHAR(50),  -- permanent, contract, freelance
-  contract_duration VARCHAR(100),  -- 6 months, ongoing, etc.
-  requirements JSONB,  -- extracted skills, experience
-  raw_data JSONB,  -- original scraped data
+  remote_type VARCHAR(50),
+  job_type VARCHAR(50),
+  contract_duration VARCHAR(100),
+  requirements JSONB,
+  tags TEXT[],
+  raw_data JSONB,
   scraped_at TIMESTAMP DEFAULT NOW(),
   expires_at TIMESTAMP,
   UNIQUE(source, source_id)
 );
-```
 
-### Job Match
-```sql
+-- Matches
 CREATE TABLE matches (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id),
-  job_id UUID REFERENCES jobs(id),
-  match_score DECIMAL(5,2),  -- 0-100
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
+  match_score DECIMAL(5,2),
   skill_matches TEXT[],
   skill_gaps TEXT[],
-  analysis JSONB,  -- detailed LLM analysis
-  status VARCHAR(50) DEFAULT 'new',  -- new, interested, applied, rejected, hidden
+  analysis JSONB,
+  status VARCHAR(50) DEFAULT 'new',
   cover_letter TEXT,
   cv_highlights TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
   UNIQUE(user_id, job_id)
 );
-```
 
-### Scrape Log
-```sql
+-- Scrape logs
 CREATE TABLE scrape_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source VARCHAR(50) NOT NULL,
@@ -145,6 +186,24 @@ CREATE TABLE scrape_logs (
   status VARCHAR(50) DEFAULT 'running',
   error TEXT
 );
+
+CREATE TABLE skill_analysis (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  analysis_date TIMESTAMP DEFAULT NOW(),
+  market_skills JSONB,
+  user_skills JSONB,
+  skill_gaps JSONB,
+  recommendations JSONB,
+  jobs_analyzed INTEGER,
+  UNIQUE(user_id)
+)
+
+-- Indexes
+CREATE INDEX idx_jobs_source ON jobs(source);
+CREATE INDEX idx_jobs_scraped_at ON jobs(scraped_at DESC);
+CREATE INDEX idx_matches_user_id ON matches(user_id);
+CREATE INDEX idx_matches_score ON matches(match_score DESC);
 ```
 
 ---
@@ -153,213 +212,328 @@ CREATE TABLE scrape_logs (
 
 ### Auth
 - `POST /auth/register` - Create account
-- `POST /auth/login` - Login (simple JWT for MVP)
+- `POST /auth/login` - Login (JWT)
 
 ### Profile
-- `GET /profile` - Get user profile
-- `PUT /profile` - Update profile
-- `POST /profile/cv` - Upload and parse CV
+- `GET /api/profile` - Get user profile
+- `PUT /api/profile` - Update profile
+- `POST /api/profile/cv` - Upload and parse CV
 
 ### Jobs
-- `GET /jobs` - List jobs (with filters)
-- `GET /jobs/:id` - Get job details
-- `POST /jobs/refresh` - Trigger scrape (admin/manual)
+- `GET /api/jobs` - List jobs (with filters)
+- `GET /api/jobs/{id}` - Get job details
+- `POST /api/jobs/refresh` - Trigger scrape
 
 ### Matches
-- `GET /matches` - Get matched jobs for user
-- `POST /matches/:job_id/generate` - Generate cover letter
-- `PUT /matches/:job_id/status` - Update status (interested, applied, etc.)
-
-### Admin
-- `GET /admin/scrape-logs` - View scrape history
-- `POST /admin/scrape` - Trigger manual scrape
+- `GET /api/matches` - Get matched jobs for user
+- `POST /api/matches/{job_id}/generate` - Generate cover letter
+- `PUT /api/matches/{job_id}/status` - Update status
 
 ---
 
-## Phase 1: Foundation (Week 1-2)
+## Phases
 
-### Goals
-- [x] Project scaffolding
-- [ ] Database schema + migrations
-- [ ] Basic FastAPI setup with health check
-- [ ] RemoteOK scraper (they have JSON API)
-- [ ] Job storage and deduplication
-- [ ] Basic React UI to view jobs
+### Phase 1: Infrastructure & Local Dev (Days 1-2)
 
-### Deliverables
-- Can scrape RemoteOK and store jobs
-- Can view jobs in UI with basic filters
-- Deployed to Fly.io + Vercel
+**Tasks:**
+1. Update Terraform config for Railway (remove Fly.io, Neon, Upstash)
+2. Update docker-compose.yml to Postgres 17
+3. Set up Alembic migrations
+4. Create all database tables
+5. Verify backend runs locally (`curl http://localhost:8000/health`)
+6. Verify frontend runs locally (http://localhost:5173)
 
-### Tasks
-1. Set up local dev environment (Docker Compose)
-2. Create database migrations (Alembic)
-3. Build RemoteOK scraper
-4. Build jobs API endpoints
-5. Build basic React UI
-6. Deploy with Terraform
+**Deliverables:**
+- [x] Terraform config for Railway + Vercel
+- [x] Local dev working (docker-compose + backend + frontend)
+- [x] Database migrations running
 
 ---
 
-## Phase 2: Matching (Week 3-4)
+### Phase 2: Job Scraping (Days 3-5)
 
-### Goals
-- [ ] CV upload and parsing
-- [ ] LLM-based requirement extraction from jobs
-- [ ] Match scoring algorithm
-- [ ] Skill gap analysis
-- [ ] Ranked job list UI
+**Tasks:**
+1. Connect RemoteOK scraper to database
+2. Add deduplication (upsert by source + source_id)
+3. Add scrape logging
+4. Implement Jobs API endpoints
+5. Build Jobs UI (list, filters, detail view)
+6. (Stretch) Add WeWorkRemotely scraper
 
-### Deliverables
-- Upload CV, get matched jobs with scores
-- See skill gaps per job
-- Filter by match score
-
-### Tasks
-1. CV upload endpoint + storage
-2. LLM prompt for CV parsing
-3. LLM prompt for job requirement extraction
-4. Matching algorithm (LLM or embeddings)
-5. Match results UI
-6. Caching layer for LLM results
+**Deliverables:**
+- [x] RemoteOK scraper storing to database
+- [x] Jobs API working
+- [x] Jobs UI with filters
 
 ---
 
-## Phase 3: Generation (Week 5-6)
+### Phase 3: Profile & CV Parsing (Days 6-8)
 
-### Goals
+**Tasks:**
+1. CV upload endpoint (PDF, DOCX, TXT)
+2. Text extraction (pypdf, python-docx)
+3. LLM parsing with Claude Haiku
+4. Preferences storage
+5. Profile UI (upload, parsed view, preferences form)
+
+**LLM Prompt - CV Parsing:**
+```
+Extract structured information from this CV. Return JSON only.
+
+{
+  "name": "string",
+  "email": "string or null",
+  "phone": "string or null", 
+  "summary": "brief professional summary",
+  "skills": ["skill1", "skill2", ...],
+  "experience": [
+    {
+      "company": "string",
+      "title": "string",
+      "start_date": "YYYY-MM or null",
+      "end_date": "YYYY-MM or null or 'present'",
+      "description": "brief description"
+    }
+  ],
+  "education": [
+    {
+      "institution": "string",
+      "degree": "string",
+      "field": "string or null",
+      "end_date": "YYYY or null"
+    }
+  ],
+  "years_of_experience": number
+}
+
+CV Text:
+---
+{cv_text}
+```
+
+**Deliverables:**
+- [ ] CV upload working
+- [ ] LLM parsing working
+- [ ] Profile UI complete
+
+---
+
+### Phase 4: Job Matching & Career Insights (Days 9-14)
+
+**Tasks:**
+1. Job requirement extraction with Claude Haiku
+2. Cache extraction results (same job = same extraction)
+3. Matching algorithm (skills comparison, score 0-100)
+4. Skill gap analysis per job
+5. **Market analysis** - aggregate skills across all scraped jobs
+6. **Career recommendations** - suggest skills to develop based on:
+   - Frequency in job postings
+   - Salary impact
+   - Learning effort given existing skills
+7. Matches API
+8. **Insights API** - `/api/insights/skills` endpoint
+9. Matches UI (ranked list, skill visualization)
+10. **Insights UI** - show recommended skills to develop
+
+
+**LLM Prompt - Job Extraction:**
+```
+Extract job requirements from this posting. Return JSON only.
+
+{
+  "required_skills": ["skill1", "skill2", ...],
+  "nice_to_have_skills": ["skill1", "skill2", ...],
+  "experience_years_min": number or null,
+  "experience_years_max": number or null,
+  "education": "string or null",
+  "languages": ["English", ...],
+  "job_type": "permanent" | "contract" | "freelance" | "part-time",
+  "remote_type": "full" | "hybrid" | "onsite",
+  "salary_min": number or null,
+  "salary_max": number or null,
+  "salary_currency": "USD" | "EUR" | etc
+}
+
+Job Posting:
+---
+Title: {title}
+Company: {company}
+Description: {description}
+```
+
+**Deliverables:**
+- [ ] Job extraction with caching
+- [ ] Matching algorithm
+- [ ] Matches API
+- [ ] Matches UI
+- [ ] Market skill analysis
+- [ ] Career recommendations
+- [ ] Insights UI
+
+---
+
+### Phase 5: Application Generation (Days 13-16)
+
+**Tasks:**
+1. Cover letter generation with Claude Sonnet
+2. CV highlights generation
+3. Generation API endpoint
+4. Generation UI (generate, edit, copy)
+5. (Optional) PDF export
+
+**LLM Prompt - Cover Letter:**
+```
+Write a cover letter for this job application. Be professional but personable.
+Highlight relevant experience. Keep it under 400 words.
+
+Candidate Profile:
+- Name: {name}
+- Skills: {skills}
+- Experience: {experience_summary}
+
+Job Details:
+- Title: {title}
+- Company: {company}
+- Requirements: {requirements}
+
+Match Analysis:
+- Matching skills: {skill_matches}
+- Gaps to address: {skill_gaps}
+
+Write the cover letter:
+```
+
+**Deliverables:**
 - [ ] Cover letter generation
-- [ ] CV highlights/tailoring
-- [ ] Application tracking
-- [ ] Email notifications (optional)
-
-### Deliverables
-- Generate tailored cover letter per job
-- Track application status
-- Export cover letter as text/PDF
-
-### Tasks
-1. Cover letter generation prompt
-2. CV highlights prompt
-3. Generation UI with editing
-4. Status tracking UI
-5. PDF export
+- [ ] CV highlights
+- [ ] Generation UI
 
 ---
 
-## Phase 4: Polish & Scale (Week 7-8)
+### Phase 6: Deploy & Polish (Days 17-20)
 
-### Goals
-- [ ] Add more job sources (WeWorkRemotely, LinkedIn)
-- [ ] Scheduled scraping (cron)
-- [ ] Better UI/UX
-- [ ] Performance optimization
-- [ ] Write case study for portfolio
+**Tasks:**
+1. Run `terraform apply`
+2. Verify Railway deployment
+3. Verify Vercel deployment
+4. Set up GitHub Actions CI
+5. Add scheduled scraping (Railway cron)
+6. Polish UI (loading, errors, mobile)
+7. Write portfolio case study
 
-### Deliverables
-- Production-ready app
-- Portfolio case study
-- (Optional) Public launch
+**Deliverables:**
+- [ ] Production deployment
+- [ ] CI/CD pipeline
+- [ ] Scheduled scraping
+- [ ] Portfolio write-up
+
+---
+
+## File Structure
+
+```
+career-agent/
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Layout.tsx
+│   │   │   ├── JobCard.tsx
+│   │   │   ├── MatchCard.tsx
+│   │   │   ├── CVUpload.tsx
+│   │   │   └── Filters.tsx
+│   │   ├── pages/
+│   │   │   ├── HomePage.tsx
+│   │   │   ├── JobsPage.tsx
+│   │   │   ├── MatchesPage.tsx
+│   │   │   └── ProfilePage.tsx
+│   │   ├── hooks/
+│   │   │   ├── useJobs.ts
+│   │   │   ├── useMatches.ts
+│   │   │   └── useProfile.ts
+│   │   ├── api/
+│   │   │   └── client.ts
+│   │   └── types/
+│   │       └── index.ts
+│   └── ...
+├── backend/
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── config.py
+│   │   ├── database.py
+│   │   ├── models/
+│   │   ├── routers/
+│   │   ├── services/
+│   │   └── llm/
+│   ├── alembic/
+│   └── requirements.txt
+├── scraping/
+│   └── scrapers/
+│       ├── remoteok.py
+│       └── weworkremotely.py
+├── infrastructure/
+│   └── terraform/
+│       ├── main.tf
+│       ├── variables.tf
+│       ├── outputs.tf
+│       └── providers.tf
+├── docker-compose.yml
+├── package.json
+└── README.md
+```
+
+---
+
+## API Keys Needed
+
+| Service | URL |
+|---------|-----|
+| Anthropic | https://console.anthropic.com/ |
+| Railway | https://railway.app/account/tokens |
+| Vercel | https://vercel.com/account/tokens |
 
 ---
 
 ## Cost Estimate (Monthly)
 
-| Service | Tier | Cost |
-|---------|------|------|
-| Neon (Postgres) | Free | $0 |
-| Upstash (Redis) | Free | $0 |
-| Fly.io (Backend) | Free allowance | $0-5 |
-| Fly.io (Scraper) | Free allowance | $0-5 |
-| Vercel (Frontend) | Free | $0 |
-| Anthropic API | Pay as you go | $10-20 |
-| **Total** | | **$10-30** |
+| Service | Cost |
+|---------|------|
+| Railway (Backend + Postgres + Redis) | $0-5 |
+| Vercel (Frontend) | $0 |
+| Anthropic API | $10-20 |
+| **Total** | **$10-25** |
 
 ---
 
-## Infrastructure (Terraform)
-
-### Providers
-- Neon (PostgreSQL) - has Terraform provider
-- Upstash (Redis) - has Terraform provider
-- Fly.io - has Terraform provider
-- Vercel - has Terraform provider
-
-### Structure
-```
-infrastructure/
-├── terraform/
-│   ├── main.tf
-│   ├── variables.tf
-│   ├── outputs.tf
-│   ├── providers.tf
-│   ├── modules/
-│   │   ├── database/
-│   │   ├── cache/
-│   │   ├── backend/
-│   │   └── frontend/
-│   └── environments/
-│       ├── dev.tfvars
-│       └── prod.tfvars
-```
-
----
-
-## Environment Variables
+## Commands Reference
 
 ```bash
+# Local development
+docker-compose up -d          # Start Postgres + Redis
+yarn install                  # Install frontend deps
+yarn backend:setup            # Set up Python venv
+yarn dev                      # Start frontend + backend
+
 # Database
-DATABASE_URL=postgresql://...
+yarn db:migrate               # Run migrations
 
-# Redis
-REDIS_URL=redis://...
+# Terraform
+cd infrastructure/terraform
+terraform init
+terraform plan -var-file=dev.tfvars
+terraform apply -var-file=dev.tfvars
 
-# Anthropic
-ANTHROPIC_API_KEY=sk-ant-...
-
-# Auth
-JWT_SECRET=...
-
-# App
-ENVIRONMENT=development
-LOG_LEVEL=INFO
-```
-
----
-
-## Getting Started (for Claude Code)
-
-```bash
-# 1. Clone repo
-git clone https://github.com/denisenanni/career-agent.git
-cd career-agent
-
-# 2. Install frontend dependencies
-yarn install
-
-# 3. Set up backend
-cd backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
-# 4. Start local services
-docker-compose up -d
-
-# 5. Run migrations
-cd backend
-alembic upgrade head
-
-# 6. Start dev servers
-yarn dev
+# Testing scraper
+cd scraping
+python -m scrapers.remoteok
 ```
 
 ---
 
 ## Notes
 
-- Start with Haiku for extraction, Sonnet for generation
-- Cache LLM results aggressively (same job = same extraction)
-- RemoteOK has a JSON API at https://remoteok.com/api
-- LinkedIn scraping is harder - save for Phase 4
-- Keep it simple first, optimize later
+- Use Haiku for extraction (cheap), Sonnet for generation (quality)
+- Cache LLM results aggressively
+- RemoteOK has JSON API at https://remoteok.com/api
+- LinkedIn scraping is harder - save for later
+- Test locally before deploying
+- Commit frequently

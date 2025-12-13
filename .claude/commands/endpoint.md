@@ -1,0 +1,1 @@
+Create a FastAPI endpoint with proper typing, error handling, and docstring.
