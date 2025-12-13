@@ -6,11 +6,15 @@ from typing import Generator
 from app.config import settings
 from app.models import Base
 
-# Create database engine
+# Create database engine with optimized connection pool settings
 engine = create_engine(
     settings.database_url,
     pool_pre_ping=True,  # Verify connections before using them
     echo=settings.log_level == "DEBUG",  # Log SQL queries in debug mode
+    pool_size=20,  # Increased from default 5 for concurrent scraping workloads
+    max_overflow=30,  # Allow temporary connection spikes (total max: 50 connections)
+    pool_recycle=3600,  # Recycle connections after 1 hour to prevent stale connections
+    pool_timeout=30,  # Wait up to 30 seconds for a connection from the pool
 )
 
 # Create session factory

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # Constants
 DEFAULT_JOBS_LIMIT = 50
-BATCH_COMMIT_SIZE = 100  # Commit every N jobs for better error recovery
+BATCH_COMMIT_SIZE = 250  # Optimized batch size: balances throughput vs memory/rollback risk
 
 
 class ScraperService:
@@ -80,15 +80,7 @@ class ScraperService:
         for idx, job_data in enumerate(jobs):
             try:
                 # Validate job data using Pydantic schema
-                try:
-                    validated_job = JobScrapedData(**job_data)
-                except ValidationError as ve:
-                    logger.warning(
-                        f"Validation failed for job {job_data.get('source_id', 'unknown')}: {ve}"
-                    )
-                    validation_failed_count += 1
-                    failed_count += 1
-                    continue
+                validated_job = JobScrapedData(**job_data)
 
                 # Convert validated model to dict
                 job_dict = validated_job.model_dump()
@@ -156,17 +148,18 @@ class ScraperService:
                         batch_count = 0
 
             except ValidationError as ve:
-                # Already handled above, but included for completeness
-                logger.warning(
-                    f"Validation error for job {job_data.get('source_id', 'unknown')}: {ve}"
-                )
+                if logger.isEnabledFor(logging.WARNING):
+                    logger.warning(
+                        f"Validation failed for job {job_data.get('source_id', 'unknown')}: {ve}"
+                    )
                 validation_failed_count += 1
                 failed_count += 1
                 continue
             except Exception as e:
-                logger.warning(
-                    f"Failed to save job {job_data.get('source_id', 'unknown')}: {e}"
-                )
+                if logger.isEnabledFor(logging.WARNING):
+                    logger.warning(
+                        f"Failed to save job {job_data.get('source_id', 'unknown')}: {e}"
+                    )
                 failed_count += 1
                 continue
 

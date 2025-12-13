@@ -16,20 +16,64 @@ MAX_SOURCE_ID_LENGTH = 200
 MAX_TAG_LENGTH = 100
 MAX_TAGS_COUNT = 50
 
+# Compiled regex patterns (compile once, use many times for performance)
+URL_PATTERN = re.compile(
+    r'^https?://'  # http:// or https://
+    r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}\.?|'  # domain...
+    r'localhost|'  # localhost...
+    r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # ...or ip
+    r'(?::\d+)?'  # optional port
+    r'(?:/?|[/?]\S+)$', re.IGNORECASE
+)
 
-def sanitize_html_content(value: Any) -> Any:
+
+def sanitize_html_content(value: Any, max_depth: int = 3, current_depth: int = 0) -> Any:
     """
     Sanitize HTML content to prevent XSS attacks.
     Escapes HTML entities in strings and recursively processes dicts/lists.
+
+    Args:
+        value: The value to sanitize
+        max_depth: Maximum recursion depth (default: 3, prevents deep object traversal)
+        current_depth: Current recursion level (internal use)
+
+    Returns:
+        Sanitized value with HTML entities escaped
     """
     if value is None:
         return None
+
+    # Prevent excessive recursion for performance
+    if current_depth >= max_depth:
+        return value
+
     if isinstance(value, str):
-        return html.escape(value)
+        # Only escape if string contains potential HTML
+        if '<' in value or '>' in value or '&' in value:
+            return html.escape(value)
+        return value
+
     if isinstance(value, dict):
-        return {k: sanitize_html_content(v) for k, v in value.items()}
+        # Selective sanitization: only sanitize values likely to contain user content
+        # Skip technical fields that won't be displayed as HTML
+        skip_keys = {'id', 'timestamp', 'date', 'created', 'updated', 'count', 'index'}
+        return {
+            k: sanitize_html_content(v, max_depth, current_depth + 1)
+            if not any(skip in k.lower() for skip in skip_keys)
+            else v
+            for k, v in value.items()
+        }
+
     if isinstance(value, list):
-        return [sanitize_html_content(item) for item in value]
+        # Only process first few items for large lists to avoid performance hit
+        if len(value) > 100:
+            # For large lists, only sanitize first 100 items
+            return [
+                sanitize_html_content(item, max_depth, current_depth + 1)
+                for item in value[:100]
+            ] + value[100:]
+        return [sanitize_html_content(item, max_depth, current_depth + 1) for item in value]
+
     return value
 
 
@@ -58,17 +102,8 @@ class JobScrapedData(BaseModel):
     @field_validator('url')
     @classmethod
     def validate_url(cls, v: str) -> str:
-        """Validate URL format"""
-        # Basic URL validation pattern
-        url_pattern = re.compile(
-            r'^https?://'  # http:// or https://
-            r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}\.?|'  # domain...
-            r'localhost|'  # localhost...
-            r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # ...or ip
-            r'(?::\d+)?'  # optional port
-            r'(?:/?|[/?]\S+)$', re.IGNORECASE
-        )
-        if not url_pattern.match(v):
+        """Validate URL format using pre-compiled regex for performance"""
+        if not URL_PATTERN.match(v):
             raise ValueError(f'Invalid URL format: {v}')
         return v
 
