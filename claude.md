@@ -3,32 +3,43 @@
 ## Stack
 - Backend: Python FastAPI
 - Frontend: React + TypeScript + Vite
-- Database: PostgreSQL (Railway)
+- Database: PostgreSQL (local dev) / Railway (prod)
+- Package manager: yarn
 
-## Safety Rules
-- Ask before running migrations
-- Ask before deleting files
-- Ask before modifying terraform
+## Workflow
+1. Read ROADMAP.md for current phase and deliverables
+2. Check in with me before starting - I'll verify the approach
+3. Complete tasks for the current phase
+4. Mark deliverables as [x] in ROADMAP.md when done
+5. Give high-level explanation of each change
+6. Keep changes simple and minimal - avoid big rewrites
+7. After finishing, ask if I want a walkthrough of the code
 
 ## Conventions
 - Use Alembic for migrations
 - Use pydantic for validation
-- Haiku for extraction, Sonnet for generation
+- Use Haiku for extraction, Sonnet for generation
+- Don't use 'any' - build types for everything
+- Before installing dependencies, check if one already exists that does the same
 
 ## Safety Rules
 
-Before running any of these, ask for confirmation:
+**Ask before:**
+- Running migrations
 - Deleting files or directories
-- Running migrations on production
 - Installing new dependencies
-- Modifying .env files
+- Modifying .env or terraform files
 - Git push, force push, or branch deletion
-- Any destructive database operations (DROP, TRUNCATE, DELETE without WHERE)
+- Destructive database operations (DROP, TRUNCATE, DELETE without WHERE)
 - Running commands with sudo
-- Modifying infrastructure/terraform files
 
-Never run without asking:
+**Never run without asking:**
 - rm -rf
 - git push --force
 - DROP TABLE / DROP DATABASE
 - terraform destroy
+
+## Quality Checks
+- Analyze code for security best practices
+- Confirm no sensitive data exposed in frontend
+- Check for exploitable vulnerabilities

@@ -271,11 +271,11 @@ CREATE INDEX idx_matches_score ON matches(match_score DESC);
 ### Phase 3: Profile & CV Parsing (Days 6-8)
 
 **Tasks:**
-1. Auth endpoints (register, login, JWT)
-2. CV upload endpoint (PDF, DOCX, TXT)
-3. Text extraction (pypdf, python-docx)
-4. LLM parsing with Claude Haiku
-5. Preferences storage
+1. ✅ Auth endpoints (register, login, JWT)
+2. ✅ CV upload endpoint (PDF, DOCX, TXT)
+3. ✅ Text extraction (pypdf, python-docx)
+4. ✅ LLM parsing with Claude Haiku
+5. ✅ Preferences storage
 6. Profile UI (upload, parsed view, preferences form)
 
 **LLM Prompt - CV Parsing:**
@@ -285,7 +285,7 @@ Extract structured information from this CV. Return JSON only.
 {
   "name": "string",
   "email": "string or null",
-  "phone": "string or null", 
+  "phone": "string or null",
   "summary": "brief professional summary",
   "skills": ["skill1", "skill2", ...],
   "experience": [
@@ -313,10 +313,23 @@ CV Text:
 {cv_text}
 ```
 
+**Implementation Details:**
+- Backend service: `app/services/llm.py` - Claude Haiku integration
+- CV parsing: `app/routers/profile.py` - Auto-parsing on upload
+- Endpoints:
+  - ✅ `POST /auth/register` - User registration with bcrypt
+  - ✅ `POST /auth/login` - JWT token (7-day expiration)
+  - ✅ `POST /auth/logout` - Logout endpoint
+  - ✅ `GET /auth/me` - Get current user
+  - ✅ `GET /api/profile` - Get profile (includes parsed_cv in preferences)
+  - ✅ `PUT /api/profile` - Update profile
+  - ✅ `POST /api/profile/cv` - Upload CV (extracts text + parses with Haiku)
+  - ✅ `GET /api/profile/cv/parsed` - Get parsed CV data
+
 **Deliverables:**
-- [ ] Register/login/logout
-- [ ] CV upload working
-- [ ] LLM parsing working
+- [x] Register/login/logout
+- [x] CV upload working
+- [x] LLM parsing working
 - [ ] Profile UI complete
 
 ---
