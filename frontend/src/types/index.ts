@@ -103,3 +103,76 @@ export interface ParsedCV {
   }>
   years_of_experience: number
 }
+
+// Match types
+export interface Match {
+  id: number
+  job_id: number
+  score: number
+  status: string
+  reasoning: {
+    overall_score: number
+    skill_score: number
+    work_type_score: number
+    location_score: number
+    salary_score: number
+    experience_score: number
+    matching_skills: string[]
+    missing_skills: string[]
+    weights: Record<string, number>
+  }
+  analysis: string
+  created_at: string
+  // Job details embedded
+  job_title: string
+  job_company: string
+  job_url: string
+  job_location: string
+  job_remote_type: string
+  job_salary_min: number | null
+  job_salary_max: number | null
+}
+
+export interface MatchesResponse {
+  matches: Match[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface MatchFilters {
+  min_score?: number
+  status?: string
+  limit?: number
+  offset?: number
+}
+
+export interface RefreshMatchesResponse {
+  matches_created: number
+  matches_updated: number
+  total_jobs_processed: number
+}
+
+// Insights types
+export interface SkillRecommendation {
+  skill: string
+  priority: 'high' | 'medium' | 'low'
+  reason: string
+  frequency: number
+  salary_impact: number | null
+  learning_effort: 'low' | 'medium' | 'high'
+}
+
+export interface SkillAnalysis {
+  user_skills: string[]
+  skill_gaps: string[]
+  recommendations: SkillRecommendation[]
+  market_skills: Record<string, {
+    count: number
+    frequency: number
+    avg_salary: number | null
+    jobs_with_salary: number
+  }>
+  jobs_analyzed: number
+  analysis_date: string
+}

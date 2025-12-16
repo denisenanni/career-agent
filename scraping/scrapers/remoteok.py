@@ -93,9 +93,10 @@ def detect_job_type(raw: dict) -> str:
 async def scrape_and_save() -> dict:
     """
     Scrape RemoteOK and save jobs to database with logging.
+    Automatically triggers matching for new jobs.
 
     Returns:
-        Dictionary with scrape statistics
+        Dictionary with scrape statistics including matching results
     """
     import sys
     sys.path.insert(0, "/Users/denisenanni/Documents/MyWorkspace/career-agent/backend")
@@ -117,7 +118,7 @@ async def scrape_and_save() -> dict:
         # Save to database
         with get_db_session() as db:
             scraper_service = ScraperService(db)
-            stats = scraper_service.save_jobs(jobs, source="remoteok", scrape_log_id=scrape_log_id)
+            stats = scraper_service.save_jobs(jobs, source="remoteok")
 
             # Update scrape log with success
             scraper_service.update_scrape_log(
@@ -128,6 +129,40 @@ async def scrape_and_save() -> dict:
             )
 
         print(f"Saved to database: {stats['new']} new, {stats['updated']} updated")
+
+        # Trigger automatic matching for new jobs if any
+        if stats["new"] > 0:
+            print(f"Triggering automatic matching for {stats['new']} new jobs...")
+            try:
+                from app.models import Job, User
+                from app.services.matching import match_job_with_all_users
+
+                matches_created = 0
+                with get_db_session() as db:
+                    # Get the newly added jobs (last N jobs from remoteok)
+                    new_jobs = (
+                        db.query(Job)
+                        .filter(Job.source == "remoteok")
+                        .order_by(Job.scraped_at.desc())
+                        .limit(stats["new"])
+                        .all()
+                    )
+
+                    # Match each new job with all users
+                    for job in new_jobs:
+                        job_matches = await match_job_with_all_users(db, job, min_score=60.0)
+                        matches_created += len(job_matches)
+
+                stats["matches_created"] = matches_created
+                print(f"Created {matches_created} matches")
+
+            except Exception as match_error:
+                print(f"Warning: Automatic matching failed: {match_error}")
+                stats["matches_created"] = 0
+                stats["matching_error"] = str(match_error)
+        else:
+            stats["matches_created"] = 0
+
         return stats
 
     except Exception as e:

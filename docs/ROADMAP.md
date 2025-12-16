@@ -378,13 +378,14 @@ Description: {description}
 ```
 
 **Deliverables:**
-- [ ] Job extraction with caching
-- [ ] Matching algorithm
-- [ ] Matches API
-- [ ] Matches UI
-- [ ] Market skill analysis
-- [ ] Career recommendations
-- [ ] Insights UI
+- [x] Job extraction with caching
+- [x] Matching algorithm
+- [x] Matches API
+- [x] Matches UI
+- [x] Market skill analysis
+- [x] Career recommendations
+- [x] Insights API
+- [x] Insights UI
 
 ---
 
@@ -594,3 +595,4 @@ python -m scrapers.remoteok
 - LinkedIn scraping is harder - save for later
 - Test locally before deploying
 - Commit frequently
+- do we use streming with Claude chats? if not is it worth to implement?

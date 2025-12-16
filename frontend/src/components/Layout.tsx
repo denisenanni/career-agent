@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { Briefcase, Target, User, Home, LogOut, LogIn } from 'lucide-react'
+import { Briefcase, Target, User, Home, LogOut, LogIn, TrendingUp } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -7,6 +7,7 @@ const navItems = [
   { to: '/', label: 'Home', icon: Home },
   { to: '/jobs', label: 'Jobs', icon: Briefcase },
   { to: '/matches', label: 'Matches', icon: Target },
+  { to: '/insights', label: 'Insights', icon: TrendingUp },
   { to: '/profile', label: 'Profile', icon: User },
 ]
 
