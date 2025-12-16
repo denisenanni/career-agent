@@ -32,7 +32,7 @@ def extract_text_from_pdf(file_content: bytes) -> str:
 
         return "\n\n".join(text_parts)
     except Exception as e:
-        raise Exception(f"Failed to extract text from PDF: {str(e)}")
+        raise ValueError(f"Failed to extract text from PDF: {str(e)}")
 
 
 def extract_text_from_docx(file_content: bytes) -> str:
@@ -59,7 +59,7 @@ def extract_text_from_docx(file_content: bytes) -> str:
 
         return "\n\n".join(text_parts)
     except Exception as e:
-        raise Exception(f"Failed to extract text from DOCX: {str(e)}")
+        raise ValueError(f"Failed to extract text from DOCX: {str(e)}")
 
 
 def extract_text_from_txt(file_content: bytes) -> str:
@@ -82,7 +82,7 @@ def extract_text_from_txt(file_content: bytes) -> str:
         except UnicodeDecodeError:
             return file_content.decode('latin-1')
     except Exception as e:
-        raise Exception(f"Failed to extract text from TXT: {str(e)}")
+        raise ValueError(f"Failed to extract text from TXT: {str(e)}")
 
 
 def extract_cv_text(filename: str, file_content: bytes) -> str:

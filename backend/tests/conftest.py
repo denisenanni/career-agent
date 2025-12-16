@@ -10,6 +10,8 @@ from sqlalchemy.pool import StaticPool
 from app.models import Base
 from app.models.job import Job
 from app.models.scrape_log import ScrapeLog
+from app.models.user import User
+from app.utils.auth import get_password_hash
 
 
 @pytest.fixture(scope="function")
@@ -116,3 +118,64 @@ def existing_job(db_session: Session, sample_job_data):
     db_session.commit()
     db_session.refresh(job)
     return job
+
+
+@pytest.fixture
+def sample_user_data():
+    """Sample user data for testing"""
+    return {
+        "email": "test@example.com",
+        "password": "testpassword123"
+    }
+
+
+@pytest.fixture
+def test_user(db_session: Session):
+    """Create a test user in the database"""
+    user = User(
+        email="test@example.com",
+        hashed_password=get_password_hash("testpassword123")
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+def sample_cv_text():
+    """Sample CV text for testing"""
+    return """
+John Doe
+Email: john.doe@example.com
+Phone: +1-555-0100
+
+PROFESSIONAL SUMMARY
+Experienced Software Engineer with 5 years of expertise in Python and web development.
+
+SKILLS
+- Programming: Python, JavaScript, SQL
+- Frameworks: Django, FastAPI, React
+- Databases: PostgreSQL, Redis
+- Cloud: AWS, Docker
+
+WORK EXPERIENCE
+
+Senior Software Engineer
+Tech Company Inc. | San Francisco, CA
+2020-01 - present
+- Led development of microservices architecture
+- Implemented CI/CD pipelines
+- Mentored junior developers
+
+Software Engineer
+Startup LLC | New York, NY
+2018-06 - 2019-12
+- Developed RESTful APIs
+- Built React-based dashboards
+
+EDUCATION
+
+Bachelor of Science in Computer Science
+University of Technology | 2018
+"""

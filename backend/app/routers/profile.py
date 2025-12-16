@@ -145,6 +145,9 @@ async def upload_cv(
                     (f" Parsed with Claude Haiku: {parsed_data.get('name', 'Unknown')}" if parsed_data else " (LLM parsing unavailable)")
         )
 
+    except HTTPException:
+        # Re-raise HTTPException as-is (from short content check, etc.)
+        raise
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -14,7 +14,7 @@ from app.dependencies.auth import get_current_user
 router = APIRouter()
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
 async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     """
     Register a new user account
@@ -22,6 +22,8 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     - **email**: Valid email address (must be unique)
     - **password**: Password (min 8 characters)
     - **full_name**: Optional full name
+
+    Returns a JWT token that can be used immediately (auto-login).
     """
     # Check if user already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
@@ -51,7 +53,9 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
             detail="Email already registered"
         )
 
-    return new_user
+    # Auto-login: Generate token for the new user
+    access_token = create_access_token(data={"user_id": new_user.id, "email": new_user.email})
+    return Token(access_token=access_token, token_type="bearer")
 
 
 @router.post("/login", response_model=Token)
