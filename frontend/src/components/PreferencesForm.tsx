@@ -11,19 +11,38 @@ export function PreferencesForm() {
 
   // Form state
   const [minSalary, setMinSalary] = useState<number | ''>('')
-  const [jobType, setJobType] = useState<string>('')
-  const [remoteType, setRemoteType] = useState<string>('')
-  const [location, setLocation] = useState<string>('')
+  const [jobTypes, setJobTypes] = useState<string[]>([])
+  const [remoteTypes, setRemoteTypes] = useState<string[]>([])
+  const [preferredCountries, setPreferredCountries] = useState<string[]>([])
 
   // Load current preferences
   useEffect(() => {
     if (user?.preferences) {
       setMinSalary(user.preferences.min_salary || '')
-      setJobType(user.preferences.job_type || '')
-      setRemoteType(user.preferences.remote_type || '')
-      setLocation(user.preferences.location || '')
+      setJobTypes(user.preferences.job_types || [])
+      setRemoteTypes(user.preferences.remote_types || [])
+      setPreferredCountries(user.preferences.preferred_countries || [])
     }
   }, [user])
+
+  // Toggle handlers for checkboxes
+  const toggleJobType = (type: string) => {
+    setJobTypes(prev =>
+      prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
+    )
+  }
+
+  const toggleRemoteType = (type: string) => {
+    setRemoteTypes(prev =>
+      prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
+    )
+  }
+
+  const toggleCountry = (country: string) => {
+    setPreferredCountries(prev =>
+      prev.includes(country) ? prev.filter(c => c !== country) : [...prev, country]
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -36,9 +55,9 @@ export function PreferencesForm() {
       const preferences: Record<string, any> = {}
 
       if (minSalary !== '') preferences.min_salary = Number(minSalary)
-      if (jobType) preferences.job_type = jobType
-      if (remoteType) preferences.remote_type = remoteType
-      if (location) preferences.location = location
+      if (jobTypes.length > 0) preferences.job_types = jobTypes
+      if (remoteTypes.length > 0) preferences.remote_types = remoteTypes
+      if (preferredCountries.length > 0) preferences.preferred_countries = preferredCountries
 
       await updateProfile({ preferences })
       await refreshUser()
@@ -78,52 +97,84 @@ export function PreferencesForm() {
         </div>
 
         <div>
-          <label htmlFor="location" className="block text-sm font-medium text-gray-700">
-            Preferred Location
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Job Types <span className="text-gray-500 text-xs">(select all that apply)</span>
           </label>
-          <input
-            id="location"
-            type="text"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-3 py-2 border"
-            placeholder="e.g., San Francisco, Remote"
-          />
+          <div className="space-y-2">
+            {['permanent', 'contract', 'freelance', 'part-time'].map((type) => (
+              <label key={type} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={jobTypes.includes(type)}
+                  onChange={() => toggleJobType(type)}
+                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                />
+                <span className="text-sm text-gray-700 capitalize">{type === 'part-time' ? 'Part-time' : type}</span>
+              </label>
+            ))}
+          </div>
+          {jobTypes.length === 0 && (
+            <p className="text-xs text-gray-500 mt-1">No selection = open to all types</p>
+          )}
         </div>
 
         <div>
-          <label htmlFor="jobType" className="block text-sm font-medium text-gray-700">
-            Job Type
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Remote Work Preference <span className="text-gray-500 text-xs">(select all that apply)</span>
           </label>
-          <select
-            id="jobType"
-            value={jobType}
-            onChange={(e) => setJobType(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-3 py-2 border"
-          >
-            <option value="">Any</option>
-            <option value="permanent">Permanent</option>
-            <option value="contract">Contract</option>
-            <option value="freelance">Freelance</option>
-            <option value="part-time">Part-time</option>
-          </select>
+          <div className="space-y-2">
+            {[
+              { value: 'full', label: 'Fully Remote' },
+              { value: 'hybrid', label: 'Hybrid' },
+              { value: 'onsite', label: 'On-site' }
+            ].map(({ value, label }) => (
+              <label key={value} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={remoteTypes.includes(value)}
+                  onChange={() => toggleRemoteType(value)}
+                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                />
+                <span className="text-sm text-gray-700">{label}</span>
+              </label>
+            ))}
+          </div>
+          {remoteTypes.length === 0 && (
+            <p className="text-xs text-gray-500 mt-1">No selection = open to all types</p>
+          )}
         </div>
 
         <div>
-          <label htmlFor="remoteType" className="block text-sm font-medium text-gray-700">
-            Remote Type
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Preferred Countries/Locations <span className="text-gray-500 text-xs">(select all that apply)</span>
           </label>
-          <select
-            id="remoteType"
-            value={remoteType}
-            onChange={(e) => setRemoteType(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-3 py-2 border"
-          >
-            <option value="">Any</option>
-            <option value="full">Fully Remote</option>
-            <option value="hybrid">Hybrid</option>
-            <option value="onsite">On-site</option>
-          </select>
+          <div className="space-y-2">
+            {[
+              'Remote',
+              'United States',
+              'United Kingdom',
+              'Canada',
+              'Germany',
+              'Netherlands',
+              'Australia',
+              'Singapore',
+              'Other Europe',
+              'Other Asia'
+            ].map((country) => (
+              <label key={country} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={preferredCountries.includes(country)}
+                  onChange={() => toggleCountry(country)}
+                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                />
+                <span className="text-sm text-gray-700">{country}</span>
+              </label>
+            ))}
+          </div>
+          {preferredCountries.length === 0 && (
+            <p className="text-xs text-gray-500 mt-1">No selection = open to all locations</p>
+          )}
         </div>
 
         {error && (
