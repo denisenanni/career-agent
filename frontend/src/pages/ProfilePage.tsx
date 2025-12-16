@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { CVUpload } from '../components/CVUpload'
 import { ParsedCVDisplay } from '../components/ParsedCVDisplay'
+import { PreferencesForm } from '../components/PreferencesForm'
 import type { CVUploadResponse } from '../types'
 
 export function ProfilePage() {
@@ -75,49 +76,7 @@ export function ProfilePage() {
         <CVUpload onUploadSuccess={handleUploadSuccess} />
 
         {/* Preferences Form */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Job Preferences</h2>
-          <form className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Minimum Salary (USD/year)
-              </label>
-              <input
-                type="number"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                placeholder="120000"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Job Type
-              </label>
-              <select className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                <option value="">Any</option>
-                <option value="permanent">Permanent</option>
-                <option value="contract">Contract</option>
-                <option value="freelance">Freelance</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Remote Type
-              </label>
-              <select className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                <option value="">Any</option>
-                <option value="full">Fully Remote</option>
-                <option value="hybrid">Hybrid</option>
-                <option value="onsite">On-site</option>
-              </select>
-            </div>
-            <button
-              type="submit"
-              className="w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700"
-            >
-              Save Preferences
-            </button>
-          </form>
-        </div>
+        <PreferencesForm />
       </div>
 
       {/* Parsed CV Display */}
