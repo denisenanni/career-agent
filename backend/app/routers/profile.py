@@ -1,9 +1,11 @@
 """
 Profile router - user profile management and CV upload
 """
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.database import get_db
 from app.models.user import User
@@ -16,6 +18,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.get("", response_model=ProfileResponse)
@@ -62,7 +65,9 @@ async def update_profile(
 
 
 @router.post("/cv", response_model=CVUploadResponse)
+@limiter.limit("5/hour")  # Limit to 5 CV uploads per hour per IP
 async def upload_cv(
+    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

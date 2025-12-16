@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react'
 import type { User, LoginRequest, RegisterRequest } from '../types'
 import * as authApi from '../api/auth'
 
@@ -37,36 +37,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function login(data: LoginRequest) {
+  const login = useCallback(async (data: LoginRequest) => {
     const response = await authApi.login(data)
     authApi.setToken(response.access_token)
     const currentUser = await authApi.getCurrentUser()
     setUser(currentUser)
-  }
+  }, [])
 
-  async function register(data: RegisterRequest) {
+  const register = useCallback(async (data: RegisterRequest) => {
     const response = await authApi.register(data)
     authApi.setToken(response.access_token)
     const currentUser = await authApi.getCurrentUser()
     setUser(currentUser)
-  }
+  }, [])
 
-  async function logout() {
+  const logout = useCallback(async () => {
     await authApi.logout()
     setUser(null)
-  }
+  }, [])
 
-  async function refreshUser() {
+  const refreshUser = useCallback(async () => {
     try {
       const currentUser = await authApi.getCurrentUser()
       setUser(currentUser)
     } catch (error) {
       console.error('Failed to refresh user:', error)
     }
-  }
+  }, [])
+
+  // Memoize context value to prevent unnecessary re-renders
+  const value = useMemo(
+    () => ({ user, loading, login, register, logout, refreshUser }),
+    [user, loading, login, register, logout, refreshUser]
+  )
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )

@@ -83,13 +83,12 @@ async def list_jobs(
     if min_salary:
         query = query.filter(Job.salary_min >= min_salary)
     if search:
-        # Escape SQL wildcards to prevent wildcard injection
-        escaped_search = escape_sql_wildcards(search)
-        search_pattern = f"%{escaped_search}%"
+        # Use PostgreSQL full-text search (much faster than ILIKE)
+        # Convert search query to tsquery format (handles AND/OR/NOT)
+        # Replace spaces with & for AND search
+        ts_query = ' & '.join(search.split())
         query = query.filter(
-            (Job.title.ilike(search_pattern))
-            | (Job.company.ilike(search_pattern))
-            | (Job.description.ilike(search_pattern))
+            Job.search_vector.match(ts_query)
         )
 
     # Get total count

@@ -1,50 +1,46 @@
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { JobCard } from '../components/JobCard'
 import { fetchJobs, refreshJobs } from '../api/jobs'
-import type { Job, JobFilters } from '../types'
+import type { JobFilters } from '../types'
 
 export function JobsPage() {
-  const [jobs, setJobs] = useState<Job[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [filters, setFilters] = useState<JobFilters>({ limit: 50 })
+  const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
+  const [limit] = useState(50)
+  const [offset, setOffset] = useState(0)
 
-  const loadJobs = async () => {
-    try {
-      setLoading(true)
-      const response = await fetchJobs(filters)
-      setJobs(response.jobs)
-      setTotal(response.total)
-    } catch (error) {
-      console.error('Failed to fetch jobs:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Memoize filters to prevent unnecessary re-renders
+  const filters = useMemo<JobFilters>(() => ({
+    limit,
+    offset,
+    search: search || undefined,
+  }), [limit, offset, search])
 
-  useEffect(() => {
-    loadJobs()
-  }, [filters])
+  // Use React Query for data fetching with caching
+  const { data, isLoading } = useQuery({
+    queryKey: ['jobs', filters],
+    queryFn: () => fetchJobs(filters),
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+  })
 
-  const handleRefresh = async () => {
-    try {
-      setRefreshing(true)
-      await refreshJobs()
+  const jobs = data?.jobs ?? []
+  const total = data?.total ?? 0
+
+  // Mutation for refreshing jobs (triggers scraper)
+  const refreshMutation = useMutation({
+    mutationFn: refreshJobs,
+    onSuccess: () => {
+      // Wait 3 seconds for scraper to complete, then refetch
       setTimeout(() => {
-        loadJobs()
+        queryClient.invalidateQueries({ queryKey: ['jobs'] })
       }, 3000)
-    } catch (error) {
-      console.error('Failed to refresh jobs:', error)
-    } finally {
-      setRefreshing(false)
-    }
-  }
+    },
+  })
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    setFilters({ ...filters, search, offset: 0 })
+    setOffset(0) // Reset to first page on new search
   }
 
   return (
@@ -55,11 +51,11 @@ export function JobsPage() {
           <p className="text-gray-600 mt-1">{total} remote jobs available</p>
         </div>
         <button
-          onClick={handleRefresh}
-          disabled={refreshing}
+          onClick={() => refreshMutation.mutate()}
+          disabled={refreshMutation.isPending}
           className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 disabled:bg-gray-400"
         >
-          {refreshing ? 'Refreshing...' : 'Refresh Jobs'}
+          {refreshMutation.isPending ? 'Refreshing...' : 'Refresh Jobs'}
         </button>
       </div>
 
@@ -82,7 +78,7 @@ export function JobsPage() {
             type="button"
             onClick={() => {
               setSearch('')
-              setFilters({ ...filters, search: undefined, offset: 0 })
+              setOffset(0)
             }}
             className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300"
           >
@@ -91,7 +87,7 @@ export function JobsPage() {
         )}
       </form>
 
-      {loading ? (
+      {isLoading ? (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
           <p className="text-gray-500">Loading jobs...</p>
         </div>

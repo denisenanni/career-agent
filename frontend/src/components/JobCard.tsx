@@ -1,35 +1,41 @@
+import { memo, useMemo } from 'react'
 import type { Job } from '../types'
 
 interface JobCardProps {
   job: Job
 }
 
-export function JobCard({ job }: JobCardProps) {
-  const formatSalary = (min: number | null, max: number | null, currency: string) => {
-    if (!min && !max) return null
-    if (min && max) {
-      return `${currency} ${min.toLocaleString()} - ${max.toLocaleString()}`
-    }
-    if (min) return `${currency} ${min.toLocaleString()}+`
-    return `Up to ${currency} ${max?.toLocaleString()}`
+// Move utility functions outside component to avoid recreating them
+const formatSalary = (min: number | null, max: number | null, currency: string) => {
+  if (!min && !max) return null
+  if (min && max) {
+    return `${currency} ${min.toLocaleString()} - ${max.toLocaleString()}`
   }
+  if (min) return `${currency} ${min.toLocaleString()}+`
+  return `Up to ${currency} ${max?.toLocaleString()}`
+}
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return null
-    const date = new Date(dateStr)
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+const formatDate = (dateStr: string | null) => {
+  if (!dateStr) return null
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
-    if (diffDays === 0) return 'Today'
-    if (diffDays === 1) return 'Yesterday'
-    if (diffDays < 7) return `${diffDays} days ago`
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`
-    return date.toLocaleDateString()
-  }
+  if (diffDays === 0) return 'Today'
+  if (diffDays === 1) return 'Yesterday'
+  if (diffDays < 7) return `${diffDays} days ago`
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`
+  return date.toLocaleDateString()
+}
 
-  const salary = formatSalary(job.salary_min, job.salary_max, job.salary_currency)
-  const postedDate = formatDate(job.posted_at)
+// Memoize component to prevent unnecessary re-renders
+export const JobCard = memo(function JobCard({ job }: JobCardProps) {
+  const salary = useMemo(
+    () => formatSalary(job.salary_min, job.salary_max, job.salary_currency),
+    [job.salary_min, job.salary_max, job.salary_currency]
+  )
+  const postedDate = useMemo(() => formatDate(job.posted_at), [job.posted_at])
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
@@ -104,4 +110,4 @@ export function JobCard({ job }: JobCardProps) {
       )}
     </div>
   )
-}
+})

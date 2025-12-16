@@ -330,7 +330,7 @@ CV Text:
 - [x] Register/login/logout
 - [x] CV upload working
 - [x] LLM parsing working
-- [ ] Profile UI complete
+- [x] Profile UI complete
 
 ---
 
@@ -442,6 +442,47 @@ Write the cover letter:
 - [ ] CI/CD pipeline
 - [ ] Scheduled scraping
 - [ ] Portfolio write-up
+
+---
+
+### Phase 7: Performance Optimizations (Future)
+
+**Critical Optimizations (COMPLETED):**
+- [x] LLM response caching (SHA256 hash-based)
+- [x] React Query for API caching (5-minute stale time)
+- [x] Rate limiting on CV upload (5/hour per IP)
+- [x] Full-text search index for jobs (PostgreSQL tsvector + GIN index)
+- [x] React component memoization (JobCard, AuthContext)
+
+**Medium Priority Optimizations:**
+- [ ] Optimize count query in jobs endpoint (use window function)
+- [ ] Add code splitting for React routes
+- [ ] Add LLM timeout handling (30s timeout)
+- [ ] Add composite indexes for match queries
+
+**Low Priority Optimizations:**
+- [ ] Stream file uploads for large CVs
+- [ ] Optimize JWT to reduce DB lookups
+- [ ] Batch job analysis with LLM
+- [ ] Add Redis for distributed caching (production)
+
+**Performance Improvements Expected:**
+- LLM Caching: 90% faster on cache hits (2-5s → 50ms)
+- React Query: 80% faster page transitions
+- Full-text search: 95% faster search queries (100ms → 5ms)
+- Memoization: 30% fewer React re-renders
+- Rate limiting: Cost protection and abuse prevention
+
+**Files Modified:**
+- `backend/app/services/llm.py` - Added in-memory cache with LRU eviction
+- `backend/app/main.py` - Added slowapi rate limiter
+- `backend/app/routers/profile.py` - Added rate limiting to CV upload
+- `backend/migrations/versions/b9152b597093_add_fulltext_search_index.py` - Added tsvector + GIN index
+- `backend/app/routers/jobs.py` - Updated search to use full-text search
+- `frontend/src/pages/JobsPage.tsx` - Refactored with React Query + useMemo
+- `frontend/src/components/JobCard.tsx` - Added memo + useMemo
+- `frontend/src/contexts/AuthContext.tsx` - Added useCallback + useMemo
+- `backend/requirements.txt` - Added slowapi==0.1.9
 
 ---
 
