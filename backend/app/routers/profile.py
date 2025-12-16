@@ -131,9 +131,10 @@ async def upload_cv(
                 current_user.experience_years = parsed_data['years_of_experience']
 
             # Store full parsed data in preferences for now (we can use it later)
-            if not current_user.preferences:
-                current_user.preferences = {}
-            current_user.preferences['parsed_cv'] = parsed_data
+            # Important: Create a new dict to trigger SQLAlchemy's change detection
+            preferences = current_user.preferences.copy() if current_user.preferences else {}
+            preferences['parsed_cv'] = parsed_data
+            current_user.preferences = preferences
         else:
             logger.warning(f"LLM parsing failed for user {current_user.id}, CV text still saved")
 

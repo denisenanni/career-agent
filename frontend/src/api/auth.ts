@@ -70,7 +70,8 @@ export async function getCurrentUser(): Promise<User> {
     throw new Error('Not authenticated')
   }
 
-  const response = await fetch(`${API_URL}/auth/me`, {
+  // Use /api/profile instead of /auth/me to get complete user info including CV data
+  const response = await fetch(`${API_URL}/api/profile`, {
     headers: {
       'Authorization': `Bearer ${token}`,
     },
