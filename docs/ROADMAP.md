@@ -639,8 +639,8 @@ Return only the JSON array.
 - [x] 5.3: CV Highlights Generation (Claude Haiku)
 - [x] 5.4: API Endpoints (generate-cover-letter, generate-highlights, regenerate)
 - [x] 5.5: Database Schema Updates (fields already exist)
-- [ ] 5.6: Frontend UI (Generation UI components)
-- [ ] Cache monitoring and metrics
+- [x] 5.6: Frontend UI (Generation UI components)
+- [ ] Cache monitoring and metrics (optional)
 
 ---
 

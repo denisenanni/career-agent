@@ -176,3 +176,21 @@ export interface SkillAnalysis {
   jobs_analyzed: number
   analysis_date: string
 }
+
+// Generation types
+export interface CoverLetterResponse {
+  cover_letter: string
+  cached: boolean
+  generated_at: string
+}
+
+export interface CVHighlightsResponse {
+  highlights: string[]
+  cached: boolean
+  generated_at: string
+}
+
+export interface RegenerateResponse {
+  message: string
+  keys_invalidated: number
+}
