@@ -1,16 +1,20 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { UserPlus } from 'lucide-react'
 
 export function RegisterPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { register } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  // Get the page user tried to access, or default to /profile
+  const from = (location.state as any)?.from?.pathname || '/profile'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -30,7 +34,8 @@ export function RegisterPage() {
 
     try {
       await register({ email, password })
-      navigate('/profile')
+      // Redirect to the page they tried to access, or profile
+      navigate(from, { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed')
     } finally {

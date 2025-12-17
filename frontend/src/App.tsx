@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { Layout } from './components/Layout'
+import { ProtectedRoute } from './components/ProtectedRoute'
 import { HomePage } from './pages/HomePage'
 import { JobsPage } from './pages/JobsPage'
 import { MatchesPage } from './pages/MatchesPage'
@@ -19,9 +20,9 @@ function App() {
           <Route path="/" element={<Layout />}>
             <Route index element={<HomePage />} />
             <Route path="jobs" element={<JobsPage />} />
-            <Route path="matches" element={<MatchesPage />} />
-            <Route path="insights" element={<InsightsPage />} />
-            <Route path="profile" element={<ProfilePage />} />
+            <Route path="matches" element={<ProtectedRoute><MatchesPage /></ProtectedRoute>} />
+            <Route path="insights" element={<ProtectedRoute><InsightsPage /></ProtectedRoute>} />
+            <Route path="profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           </Route>
         </Routes>
       </BrowserRouter>

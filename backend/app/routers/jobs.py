@@ -10,7 +10,9 @@ import logging
 from app.database import get_db
 from app.models.job import Job
 from app.models.scrape_log import ScrapeLog
+from app.models.user import User
 from app.schemas.job import JobsResponse, JobDetail, JobListItem, ScrapeLogResponse
+from app.dependencies.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -168,13 +170,17 @@ async def run_scraper():
 
 
 @router.post("/refresh")
-async def refresh_jobs(background_tasks: BackgroundTasks):
+async def refresh_jobs(
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user)
+):
     """
     Trigger job scraping in the background.
 
-    Note: In production, consider adding rate limiting or authentication.
+    Requires authentication. Only authenticated users can trigger job scraping.
     """
     try:
+        logger.info(f"Job scraping triggered by user {current_user.id} ({current_user.email})")
         background_tasks.add_task(run_scraper)
         return {
             "status": "queued",
