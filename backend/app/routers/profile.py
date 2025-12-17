@@ -9,7 +9,7 @@ from slowapi.util import get_remote_address
 
 from app.database import get_db
 from app.models.user import User
-from app.dependencies.auth import get_current_user
+from app.dependencies.auth import get_current_user, invalidate_user_cache
 from app.schemas.profile import ProfileUpdate, CVUploadResponse, ProfileResponse
 from app.utils.cv_parser import extract_cv_text, validate_cv_file
 from app.services.llm import parse_cv_with_llm
@@ -60,6 +60,9 @@ async def update_profile(
 
     db.commit()
     db.refresh(current_user)
+
+    # Invalidate user cache to ensure fresh data on next request
+    invalidate_user_cache(current_user.id)
 
     return current_user
 
@@ -140,6 +143,9 @@ async def upload_cv(
 
         db.commit()
         db.refresh(current_user)
+
+        # Invalidate user cache to ensure fresh data on next request
+        invalidate_user_cache(current_user.id)
 
         return CVUploadResponse(
             filename=file.filename,

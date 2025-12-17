@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
-from sqlalchemy import func, over
+from sqlalchemy import func, over, text
 from typing import Optional
 from enum import Enum
 import os
@@ -86,12 +86,10 @@ async def list_jobs(
         query = query.filter(Job.salary_min >= min_salary)
     if search:
         # Use PostgreSQL full-text search (much faster than ILIKE)
-        # Convert search query to tsquery format (handles AND/OR/NOT)
-        # Replace spaces with & for AND search
-        ts_query = ' & '.join(search.split())
+        # plainto_tsquery safely converts plain text to tsquery format
         query = query.filter(
-            Job.search_vector.match(ts_query)
-        )
+            text("search_vector @@ plainto_tsquery('english', :search)")
+        ).params(search=search)
 
     # Optimize: Use window function to get count in same query (single DB hit instead of two)
     # Add row count as a window function

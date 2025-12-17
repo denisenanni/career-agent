@@ -679,10 +679,13 @@ Return only the JSON array.
 - [x] Add composite indexes for match queries
 
 **Low Priority Optimizations:**
-- [ ] Stream file uploads for large CVs
-- [ ] Optimize JWT to reduce DB lookups
-- [ ] Batch job analysis with LLM
-- [ ] Add Redis for distributed caching (production)
+- [ ] Stream file uploads for large CVs (optional, deferred)
+- [x] Optimize JWT to reduce DB lookups
+- [ ] Batch job analysis with LLM (optional, deferred)
+- [ ] Add Redis for distributed caching (production only)
+
+**Other improvements:**
+
 
 **Performance Improvements:**
 
@@ -720,6 +723,16 @@ Return only the JSON array.
 - `frontend/src/App.tsx` - Added React.lazy() and Suspense for code splitting
 
 ---
+
+
+### Phase 7.1: Pre production checks and final adjustments
+**Tasks:**
+1. CHeck JWT implementation
+2. editable profile/skills. How to allow the user to edit the informations obtianed from parsing?
+3. Search in jobs doesn't work? with search parameters i get 500 (example http://localhost:8000/api/jobs?search=lead&limit=50)
+4. Add some more matching parameters (like job title) because i get matches for Director People Ops for example, and i'm a software developer
+3. More tests
+
 
 ## File Structure
 
