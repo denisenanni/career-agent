@@ -1,6 +1,7 @@
 import type { Job, JobsResponse, JobFilters } from '../types'
+import { getToken } from './auth'
 
-const API_URL = import.meta.env.VITE_API_URL || ''
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export async function fetchJobs(filters: JobFilters = {}): Promise<JobsResponse> {
   const params = new URLSearchParams()
@@ -33,8 +34,16 @@ export async function fetchJob(id: number): Promise<Job> {
 }
 
 export async function refreshJobs(): Promise<void> {
+  const token = getToken()
+  if (!token) {
+    throw new Error('Not authenticated')
+  }
+
   const response = await fetch(`${API_URL}/api/jobs/refresh`, {
     method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
   })
 
   if (!response.ok) {

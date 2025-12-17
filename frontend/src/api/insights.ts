@@ -1,9 +1,10 @@
 import type { SkillAnalysis } from '../types'
+import { getToken } from './auth'
 
-const API_URL = import.meta.env.VITE_API_URL || ''
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export async function fetchSkillInsights(refresh = false): Promise<SkillAnalysis> {
-  const token = localStorage.getItem('token')
+  const token = getToken()
   if (!token) {
     throw new Error('Not authenticated')
   }
@@ -29,7 +30,7 @@ export async function fetchSkillInsights(refresh = false): Promise<SkillAnalysis
 }
 
 export async function refreshSkillInsights(): Promise<SkillAnalysis> {
-  const token = localStorage.getItem('token')
+  const token = getToken()
   if (!token) {
     throw new Error('Not authenticated')
   }

@@ -1,9 +1,10 @@
 import type { MatchesResponse, MatchFilters, RefreshMatchesResponse } from '../types'
+import { getToken } from './auth'
 
-const API_URL = import.meta.env.VITE_API_URL || ''
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export async function fetchMatches(filters: MatchFilters = {}): Promise<MatchesResponse> {
-  const token = localStorage.getItem('token')
+  const token = getToken()
   if (!token) {
     throw new Error('Not authenticated')
   }
@@ -29,7 +30,7 @@ export async function fetchMatches(filters: MatchFilters = {}): Promise<MatchesR
 }
 
 export async function refreshMatches(): Promise<RefreshMatchesResponse> {
-  const token = localStorage.getItem('token')
+  const token = getToken()
   if (!token) {
     throw new Error('Not authenticated')
   }
@@ -49,7 +50,7 @@ export async function refreshMatches(): Promise<RefreshMatchesResponse> {
 }
 
 export async function updateMatchStatus(matchId: number, status: string): Promise<void> {
-  const token = localStorage.getItem('token')
+  const token = getToken()
   if (!token) {
     throw new Error('Not authenticated')
   }

@@ -58,10 +58,9 @@ def analyze_market_skills(db: Session, limit: Optional[int] = None) -> Dict[str,
             continue
 
         # Get all skills (required + nice-to-have)
-        all_skills = (
-            requirements.get("required_skills", []) +
-            requirements.get("nice_to_have_skills", [])
-        )
+        required_skills = requirements.get("required_skills") or []
+        nice_to_have_skills = requirements.get("nice_to_have_skills") or []
+        all_skills = required_skills + nice_to_have_skills
 
         # Normalize and count
         normalized_skills = [s.lower().strip() for s in all_skills]
