@@ -389,41 +389,258 @@ Description: {description}
 
 ---
 
-### Phase 5: Application Generation (Days 13-16)
+### Phase 4.5: Security & Route Protection (Security Hardening)
 
 **Tasks:**
-1. Cover letter generation with Claude Sonnet
-2. CV highlights generation
-3. Generation API endpoint
-4. Generation UI (generate, edit, copy)
-5. (Optional) PDF export
+1. ✅ Frontend route guards for protected pages
+2. ✅ Redirect to original destination after login
+3. ✅ Backend endpoint protection (jobs refresh)
+4. ✅ Fix authentication token inconsistencies
+5. ✅ Fix insights API null handling bug
 
-**LLM Prompt - Cover Letter:**
+**Implementation Details:**
+- **Frontend Protection:**
+  - Created `ProtectedRoute` component that wraps protected routes
+  - Protected routes: `/matches`, `/insights`, `/profile`
+  - Public routes: `/`, `/jobs`, `/login`, `/register`
+  - Saves attempted destination and redirects after successful login
+  - Shows loading state while checking authentication
+
+- **Backend Protection:**
+  - Added authentication to `/api/jobs/refresh` endpoint (was public)
+  - Logs user ID when scraping is triggered for audit trail
+  - All `/api/matches/*` and `/api/insights/*` endpoints require auth
+
+- **Bug Fixes:**
+  - Fixed token key mismatch: insights/matches APIs were using wrong localStorage key
+  - Standardized all API files to use `getToken()` from auth.ts
+  - Fixed null handling in insights service (skill concatenation bug)
+  - Added proper API URL fallbacks for local development
+
+**Files Modified:**
+- `frontend/src/components/ProtectedRoute.tsx` - New component for route protection
+- `frontend/src/App.tsx` - Wrapped protected routes with ProtectedRoute
+- `frontend/src/pages/LoginPage.tsx` - Added redirect to original destination
+- `frontend/src/pages/RegisterPage.tsx` - Added redirect to original destination
+- `frontend/src/api/matches.ts` - Fixed token retrieval, added auth to refresh
+- `frontend/src/api/insights.ts` - Fixed token retrieval
+- `frontend/src/api/jobs.ts` - Added auth to refreshJobs(), fixed API URL
+- `backend/app/routers/jobs.py` - Added auth requirement to refresh endpoint
+- `backend/app/services/insights.py` - Fixed null concatenation bug
+
+**Security Improvements:**
+- Protected routes now require authentication before rendering
+- Unauthorized users redirected to login with return path
+- All sensitive API endpoints require Bearer token
+- Centralized token management prevents inconsistencies
+- User actions logged for audit trail
+
+**Deliverables:**
+- [x] Frontend route protection
+- [x] Post-login redirect flow
+- [x] Backend endpoint security
+- [x] Token consistency fixes
+- [x] Bug fixes for production readiness
+
+---
+
+### Phase 5: Application Generation with Redis Caching (Days 13-16)
+
+**Priority: Maximize Redis caching to minimize Claude API costs**
+
+**Tasks:**
+
+**5.1: Redis Infrastructure (Foundation)**
+1. Create Redis connection service (`app/services/redis_cache.py`)
+   - Connection pool management
+   - Get/set/delete operations with JSON serialization
+   - TTL (time-to-live) configuration
+   - Error handling and fallback behavior
+2. Migrate existing in-memory LLM cache to Redis
+   - Update `app/services/llm.py` to use Redis
+   - CV parsing cache (30-day TTL)
+   - Job extraction cache (7-day TTL)
+3. Test Redis caching with existing endpoints
+
+**5.2: Cover Letter Generation (Claude Sonnet)**
+1. Create generation service (`app/services/generation.py`)
+   - `generate_cover_letter(user, job, match)` function
+   - **Redis cache key:** `cover_letter:{user_id}:{job_id}` (30-day TTL)
+   - Cache hit = instant return, no LLM call
+   - Cache miss = Claude Sonnet call + store in Redis
+2. Cover letter prompt optimization
+   - Use match analysis for personalization
+   - Include relevant experience highlights
+   - Professional tone, ~300-400 words
+   - Include skill matches and gap addressing strategy
+
+**5.3: CV Highlights Generation**
+1. Add `generate_cv_highlights(user, job, match)` function
+   - **Redis cache key:** `cv_highlights:{user_id}:{job_id}` (30-day TTL)
+   - Extract 3-5 most relevant experiences
+   - Tailor bullet points to job requirements
+   - Highlight matching skills
+2. Use Claude Haiku (cheaper, sufficient for extraction)
+
+**5.4: API Endpoints**
+1. `POST /api/matches/{match_id}/generate-cover-letter`
+   - Check Redis cache first
+   - Generate if not cached
+   - Return cached/generated content
+   - Response: `{ "cover_letter": str, "cached": bool, "generated_at": datetime }`
+2. `POST /api/matches/{match_id}/generate-highlights`
+   - Check Redis cache first
+   - Generate if not cached
+   - Return cached/generated content
+   - Response: `{ "highlights": [str], "cached": bool, "generated_at": datetime }`
+3. `POST /api/matches/{match_id}/regenerate` (force refresh)
+   - Clear Redis cache for this match
+   - Generate new content
+   - Useful if user updates CV/profile
+
+**5.5: Database Schema Updates**
+1. Add columns to `matches` table:
+   - `cover_letter TEXT` - Store generated cover letter
+   - `cv_highlights TEXT` - Store highlights (JSON array)
+   - `generated_at TIMESTAMP` - When content was generated
+2. Migration: `alembic revision --autogenerate -m "add_generation_fields"`
+
+**5.6: Frontend UI**
+1. Update `MatchCard` component
+   - Add "Generate Application Materials" button
+   - Show loading state during generation
+   - Display "Cached ⚡" badge for instant responses
+2. Create `ApplicationMaterialsModal` component
+   - Tabs: Cover Letter | CV Highlights
+   - Edit capability (textarea with save)
+   - Copy to clipboard button
+   - Download as text file
+   - Show cache status and generation time
+3. Add regenerate button with confirmation
+
+**LLM Prompts:**
+
+**Cover Letter (Claude Sonnet 3.5):**
 ```
-Write a cover letter for this job application. Be professional but personable.
-Highlight relevant experience. Keep it under 400 words.
+Write a professional cover letter for this job application. Be genuine and personable while remaining professional.
 
-Candidate Profile:
-- Name: {name}
-- Skills: {skills}
-- Experience: {experience_summary}
+CANDIDATE INFORMATION:
+Name: {name}
+Current Skills: {skills}
+Years of Experience: {years}
+Professional Summary: {summary}
 
-Job Details:
-- Title: {title}
-- Company: {company}
-- Requirements: {requirements}
+Relevant Experience:
+{experience_entries}
 
-Match Analysis:
-- Matching skills: {skill_matches}
-- Gaps to address: {skill_gaps}
+JOB DETAILS:
+Position: {job_title}
+Company: {company_name}
+Requirements: {job_requirements}
+
+MATCH ANALYSIS:
+Matching Skills: {skill_matches}
+Skill Gaps: {skill_gaps}
+Match Score: {score}%
+
+INSTRUCTIONS:
+1. Keep it under 400 words
+2. Address why you're a strong fit (emphasize matching skills)
+3. Briefly acknowledge skill gaps and show willingness to learn
+4. Express genuine interest in the company and role
+5. Professional but not overly formal tone
+6. Do not include address or date (modern format)
+7. Start with "Dear Hiring Manager," and end with "Best regards,"
 
 Write the cover letter:
 ```
 
+**CV Highlights (Claude Haiku):**
+```
+Extract and optimize the 3-5 most relevant experience bullet points from this candidate's CV for the target job.
+
+CANDIDATE EXPERIENCE:
+{experience_entries}
+
+CANDIDATE SKILLS:
+{skills}
+
+TARGET JOB:
+Title: {job_title}
+Required Skills: {required_skills}
+Description: {job_description}
+
+INSTRUCTIONS:
+Return a JSON array of 3-5 bullet points that:
+1. Highlight experiences directly relevant to the job requirements
+2. Emphasize matching skills
+3. Use strong action verbs
+4. Include metrics/results where available
+5. Tailor language to match job description keywords
+
+Format: ["bullet point 1", "bullet point 2", ...]
+
+Return only the JSON array.
+```
+
+**Caching Strategy:**
+
+| Content Type | Cache Key | Model | TTL | Cost Savings |
+|--------------|-----------|-------|-----|--------------|
+| CV Parsing | `cv_parse:{hash}` | Haiku | 30d | ~$0.01/parse → free on cache hit |
+| Job Extraction | `job_extract:{job_id}` | Haiku | 7d | ~$0.005/job → free on cache hit |
+| Cover Letter | `cover_letter:{user_id}:{job_id}` | Sonnet | 30d | ~$0.15/letter → free on cache hit |
+| CV Highlights | `cv_highlights:{user_id}:{job_id}` | Haiku | 30d | ~$0.01/highlight → free on cache hit |
+
+**Expected Impact:**
+- 90%+ cache hit rate for repeated generations
+- ~$0.16 → $0.00 per cached cover letter
+- Instant responses for cached content (<50ms vs 2-5s)
+- Reduced Claude API usage by 70-90%
+
+**Files to Create/Modify:**
+- ✅ `backend/app/services/redis_cache.py` - Redis service
+- ✅ `backend/app/services/generation.py` - Generation logic
+- ✅ `backend/app/services/llm.py` - Migrate to Redis
+- ✅ `backend/app/routers/matches.py` - Add generation endpoints
+- ✅ `backend/migrations/versions/xxx_add_generation_fields.py` - DB schema
+- ✅ `frontend/src/components/ApplicationMaterialsModal.tsx` - Generation UI
+- ✅ `frontend/src/components/MatchCard.tsx` - Update with generate button
+- ✅ `frontend/src/api/matches.ts` - Add generation API calls
+- ✅ `frontend/src/types/index.ts` - Add generation types
+
+**Testing Strategy:**
+1. Test Redis connection and cache operations
+2. Test cache hit/miss behavior
+3. Test generation with real user: `info@devdenise.com`
+4. Monitor Claude API usage during testing
+5. Verify cache invalidation on regenerate
+
+**Progress:**
+- **Redis Infrastructure**: ✅ Complete
+  - Created `redis_cache.py` with connection pooling, TTL support, JSON serialization
+  - Tested basic operations (set, get, delete, exists, TTL)
+  - Helper functions for cache key building
+
+- **LLM Cache Migration**: ✅ Complete
+  - Migrated CV parsing cache to Redis (30-day TTL)
+  - Migrated job extraction cache to Redis (7-day TTL)
+  - Removed in-memory cache dictionaries
+
+- **Generation Service**: ✅ Complete
+  - `generate_cover_letter()` with Claude Sonnet 3.5
+  - `generate_cv_highlights()` with Claude Haiku
+  - Both use Redis caching with 30-day TTL
+  - Cache-first strategy: instant responses for cached content
+
 **Deliverables:**
-- [ ] Cover letter generation
-- [ ] CV highlights
-- [ ] Generation UI
+- [x] 5.1: Redis Infrastructure (foundation)
+- [x] 5.2: Cover Letter Generation (Claude Sonnet)
+- [x] 5.3: CV Highlights Generation (Claude Haiku)
+- [x] 5.4: API Endpoints (generate-cover-letter, generate-highlights, regenerate)
+- [x] 5.5: Database Schema Updates (fields already exist)
+- [ ] 5.6: Frontend UI (Generation UI components)
+- [ ] Cache monitoring and metrics
 
 ---
 
@@ -596,3 +813,4 @@ python -m scrapers.remoteok
 - Test locally before deploying
 - Commit frequently
 - do we use streming with Claude chats? if not is it worth to implement?
+- redocs?

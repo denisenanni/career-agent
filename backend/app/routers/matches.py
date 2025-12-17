@@ -12,6 +12,8 @@ from app.database import get_db
 from app.models import User, Match, Job
 from app.dependencies.auth import get_current_user
 from app.services.matching import match_user_with_all_jobs
+from app.services.generation import generate_cover_letter, generate_cv_highlights
+from app.services.redis_cache import cache_delete_pattern, build_match_content_pattern
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +58,23 @@ class RefreshMatchesResponse(BaseModel):
     matches_created: int
     matches_updated: int
     total_jobs_processed: int
+
+
+class CoverLetterResponse(BaseModel):
+    cover_letter: str
+    cached: bool
+    generated_at: str
+
+
+class CVHighlightsResponse(BaseModel):
+    highlights: List[str]
+    cached: bool
+    generated_at: str
+
+
+class RegenerateResponse(BaseModel):
+    message: str
+    keys_invalidated: int
 
 
 @router.get("", response_model=MatchListResponse)
@@ -250,17 +269,142 @@ async def update_match_status(
     return {"match_id": match_id, "status": match.status}
 
 
-@router.post("/{job_id}/generate")
-async def generate_application(job_id: int):
+@router.post("/{match_id}/generate-cover-letter", response_model=CoverLetterResponse)
+async def generate_match_cover_letter(
+    match_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
-    Generate cover letter and CV highlights for a job
+    Generate a personalized cover letter for a match
 
-    NOTE: This will be implemented in Phase 5
+    This endpoint will:
+    1. Check Redis cache first for existing cover letter
+    2. If cached, return instantly (sub-50ms response)
+    3. If not cached, generate using Claude Sonnet and cache for 30 days
     """
-    # TODO: Implement LLM generation in Phase 5
-    return {
-        "job_id": job_id,
-        "cover_letter": None,
-        "cv_highlights": None,
-        "status": "not_implemented",
-    }
+    # Find match and verify ownership
+    match = db.query(Match).filter(
+        Match.id == match_id,
+        Match.user_id == current_user.id
+    ).first()
+
+    if not match:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Match not found"
+        )
+
+    # Get job details
+    job = db.query(Job).filter(Job.id == match.job_id).first()
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Associated job not found"
+        )
+
+    # Generate cover letter
+    result = generate_cover_letter(current_user, job, match)
+
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate cover letter"
+        )
+
+    return CoverLetterResponse(**result)
+
+
+@router.post("/{match_id}/generate-highlights", response_model=CVHighlightsResponse)
+async def generate_match_highlights(
+    match_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Generate tailored CV highlights for a match
+
+    This endpoint will:
+    1. Check Redis cache first for existing highlights
+    2. If cached, return instantly (sub-50ms response)
+    3. If not cached, generate using Claude Haiku and cache for 30 days
+    """
+    # Find match and verify ownership
+    match = db.query(Match).filter(
+        Match.id == match_id,
+        Match.user_id == current_user.id
+    ).first()
+
+    if not match:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Match not found"
+        )
+
+    # Get job details
+    job = db.query(Job).filter(Job.id == match.job_id).first()
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Associated job not found"
+        )
+
+    # Generate CV highlights
+    result = generate_cv_highlights(current_user, job, match)
+
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate CV highlights"
+        )
+
+    return CVHighlightsResponse(**result)
+
+
+@router.post("/{match_id}/regenerate", response_model=RegenerateResponse)
+async def regenerate_match_content(
+    match_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Clear cache and force regeneration of all content for a match
+
+    This is useful when:
+    - User has updated their CV or profile
+    - User wants fresh content with different wording
+    - Cached content is outdated
+
+    This will invalidate the cache for both cover letter and CV highlights.
+    The next request will generate fresh content.
+    """
+    # Find match and verify ownership
+    match = db.query(Match).filter(
+        Match.id == match_id,
+        Match.user_id == current_user.id
+    ).first()
+
+    if not match:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Match not found"
+        )
+
+    # Get job details to get job_id
+    job = db.query(Job).filter(Job.id == match.job_id).first()
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Associated job not found"
+        )
+
+    # Invalidate all cached content for this match
+    pattern = build_match_content_pattern(current_user.id, job.id)
+    keys_invalidated = cache_delete_pattern(pattern)
+
+    logger.info(f"Invalidated {keys_invalidated} cache keys for match {match_id}")
+
+    return RegenerateResponse(
+        message=f"Cache cleared for match {match_id}. Next generation will create fresh content.",
+        keys_invalidated=keys_invalidated
+    )

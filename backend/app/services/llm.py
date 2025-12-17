@@ -1,5 +1,7 @@
 """
 LLM service for CV parsing and job analysis using Claude
+
+Now uses Redis caching for distributed caching across servers and persistence
 """
 from typing import Optional, Dict, Any
 import json
@@ -7,17 +9,16 @@ import logging
 import hashlib
 from anthropic import Anthropic
 from app.config import settings
+from app.services.redis_cache import (
+    cache_get, cache_set,
+    build_cv_parse_key, build_job_extract_key,
+    TTL_30_DAYS, TTL_7_DAYS
+)
 
 logger = logging.getLogger(__name__)
 
 # Initialize Anthropic client
 client = Anthropic(api_key=settings.anthropic_api_key) if settings.anthropic_api_key else None
-
-# In-memory cache for LLM results (simple cache, good for single server)
-# For production with multiple servers, use Redis instead
-_cv_parse_cache: Dict[str, Dict[str, Any]] = {}
-_job_extract_cache: Dict[str, Dict[str, Any]] = {}
-MAX_CACHE_SIZE = 1000  # Limit cache size to prevent memory issues
 
 
 def parse_cv_with_llm(cv_text: str) -> Optional[Dict[str, Any]]:
@@ -45,14 +46,16 @@ def parse_cv_with_llm(cv_text: str) -> Optional[Dict[str, Any]]:
         return None
 
     # Generate cache key from CV text hash
-    cache_key = hashlib.sha256(cv_text.encode()).hexdigest()
+    cv_hash = hashlib.sha256(cv_text.encode()).hexdigest()
+    cache_key = build_cv_parse_key(cv_hash)
 
-    # Check cache first
-    if cache_key in _cv_parse_cache:
-        logger.info(f"Cache hit for CV parsing: {cache_key[:8]}...")
-        return _cv_parse_cache[cache_key]
+    # Check Redis cache first
+    cached_result = cache_get(cache_key)
+    if cached_result is not None:
+        logger.info(f"Redis cache hit for CV parsing: {cv_hash[:8]}...")
+        return cached_result
 
-    logger.info(f"Cache miss for CV parsing: {cache_key[:8]}..., calling LLM")
+    logger.info(f"Redis cache miss for CV parsing: {cv_hash[:8]}..., calling LLM")
 
     prompt = f"""Extract structured information from this CV. Return ONLY valid JSON, no other text.
 
@@ -115,12 +118,9 @@ Return only the JSON object, no markdown formatting or explanations."""
 
         logger.info(f"Successfully parsed CV for: {parsed_data.get('name', 'Unknown')}")
 
-        # Cache the result
-        _cv_parse_cache[cache_key] = parsed_data
-        # Simple LRU: Remove oldest entry if cache is too large
-        if len(_cv_parse_cache) > MAX_CACHE_SIZE:
-            _cv_parse_cache.pop(next(iter(_cv_parse_cache)))
-            logger.info(f"Cache size limit reached, removed oldest entry")
+        # Cache the result in Redis (30-day TTL)
+        cache_set(cache_key, parsed_data, ttl_seconds=TTL_30_DAYS)
+        logger.info(f"Cached CV parse result in Redis for 30 days")
 
         return parsed_data
 
@@ -161,14 +161,17 @@ def extract_job_requirements(job_title: str, job_company: str, job_description: 
 
     # Generate cache key from job content hash
     job_content = f"{job_title}|{job_company}|{job_description}"
-    cache_key = hashlib.sha256(job_content.encode()).hexdigest()
+    job_hash = hashlib.sha256(job_content.encode()).hexdigest()
+    # For job extraction, we'll use the hash directly as it's not tied to a specific job ID yet
+    cache_key = f"job_extract_hash:{job_hash}"
 
-    # Check cache first
-    if cache_key in _job_extract_cache:
-        logger.info(f"Cache hit for job extraction: {cache_key[:8]}...")
-        return _job_extract_cache[cache_key]
+    # Check Redis cache first
+    cached_result = cache_get(cache_key)
+    if cached_result is not None:
+        logger.info(f"Redis cache hit for job extraction: {job_hash[:8]}...")
+        return cached_result
 
-    logger.info(f"Cache miss for job extraction: {cache_key[:8]}..., calling LLM")
+    logger.info(f"Redis cache miss for job extraction: {job_hash[:8]}..., calling LLM")
 
     prompt = f"""Extract job requirements from this posting. Return ONLY valid JSON, no other text.
 
@@ -215,12 +218,9 @@ Return only the JSON object, no markdown formatting or explanations."""
 
         logger.info(f"Successfully extracted requirements for: {job_title} at {job_company}")
 
-        # Cache the result
-        _job_extract_cache[cache_key] = parsed_data
-        # Simple LRU: Remove oldest entry if cache is too large
-        if len(_job_extract_cache) > MAX_CACHE_SIZE:
-            _job_extract_cache.pop(next(iter(_job_extract_cache)))
-            logger.info(f"Job extraction cache size limit reached, removed oldest entry")
+        # Cache the result in Redis (7-day TTL)
+        cache_set(cache_key, parsed_data, ttl_seconds=TTL_7_DAYS)
+        logger.info(f"Cached job extraction result in Redis for 7 days")
 
         return parsed_data
 
