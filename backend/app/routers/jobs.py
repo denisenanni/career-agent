@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, over
 from typing import Optional
 from enum import Enum
 import os
@@ -93,11 +93,21 @@ async def list_jobs(
             Job.search_vector.match(ts_query)
         )
 
-    # Get total count
-    total = query.count()
+    # Optimize: Use window function to get count in same query (single DB hit instead of two)
+    # Add row count as a window function
+    count_column = func.count().over().label('total_count')
+    query_with_count = query.add_columns(count_column)
 
-    # Get paginated results
-    jobs = query.order_by(Job.scraped_at.desc()).offset(offset).limit(limit).all()
+    # Get paginated results with count
+    results = query_with_count.order_by(Job.scraped_at.desc()).offset(offset).limit(limit).all()
+
+    # Extract jobs and total count
+    if results:
+        jobs = [row[0] for row in results]  # First element is the Job object
+        total = results[0][1]  # Second element is the total_count from window function
+    else:
+        jobs = []
+        total = 0
 
     # Convert to response models with truncated descriptions
     job_items = []

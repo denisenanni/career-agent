@@ -95,9 +95,10 @@ Return only the JSON object, no markdown formatting or explanations."""
     try:
         # Use Claude Haiku for fast, cost-effective extraction
         message = client.messages.create(
-            model="claude-3-haiku-20240307",
+            model="claude-haiku-4-5-20251001",
             max_tokens=2048,
             temperature=0,  # Deterministic for extraction
+            timeout=30.0,  # 30 second timeout
             messages=[
                 {"role": "user", "content": prompt}
             ]
@@ -197,9 +198,10 @@ Return only the JSON object, no markdown formatting or explanations."""
 
     try:
         message = client.messages.create(
-            model="claude-3-haiku-20240307",
+            model="claude-haiku-4-5-20251001",
             max_tokens=1024,
             temperature=0,
+            timeout=30.0,  # 30 second timeout
             messages=[
                 {"role": "user", "content": prompt}
             ]

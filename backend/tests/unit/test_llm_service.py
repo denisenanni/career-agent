@@ -71,7 +71,7 @@ class TestCVParsing:
         # Verify Claude was called with correct parameters
         mock_client.messages.create.assert_called_once()
         call_kwargs = mock_client.messages.create.call_args[1]
-        assert call_kwargs["model"] == "claude-3-haiku-20240307"
+        assert call_kwargs["model"] == "claude-haiku-4-5-20251001"
         assert call_kwargs["temperature"] == 0
         assert sample_cv_text in call_kwargs["messages"][0]["content"]
 
@@ -266,7 +266,7 @@ class TestLLMServiceConfiguration:
         parse_cv_with_llm(sample_cv_text)
 
         call_kwargs = mock_client.messages.create.call_args[1]
-        assert call_kwargs["model"] == "claude-3-haiku-20240307"
+        assert call_kwargs["model"] == "claude-haiku-4-5-20251001"
 
     @patch('app.services.llm.client')
     def test_uses_zero_temperature(self, mock_client, sample_cv_text):
