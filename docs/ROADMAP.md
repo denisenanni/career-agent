@@ -910,5 +910,6 @@ python -m scrapers.remoteok
 - LinkedIn scraping is harder - save for later
 - Test locally before deploying
 - Commit frequently
-- do we use streming with Claude chats? if not is it worth to implement?
+- do we use streaming with Claude chats? if not is it worth to implement?
 - redocs?
+- i want to add a functionality that allows the user to paste a job add (maybe something that didn't come from the job listing) and it si parsed and added  to a new entity that will represent job ads added by user, so visible just to that user, where will be performed the same analysis of the other jobs. It will tell the user what skills he need to develop, if any, to have more chances to be hired. This list of jobs should be shown in another section separated from the ones shows in 'Jobs'. so maybe another menu item or a section in profile
