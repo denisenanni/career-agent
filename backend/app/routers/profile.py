@@ -10,7 +10,7 @@ from slowapi.util import get_remote_address
 from app.database import get_db
 from app.models.user import User
 from app.dependencies.auth import get_current_user, invalidate_user_cache
-from app.schemas.profile import ProfileUpdate, CVUploadResponse, ProfileResponse
+from app.schemas.profile import ProfileUpdate, CVUploadResponse, ProfileResponse, ParsedCVUpdate
 from app.utils.cv_parser import extract_cv_text, validate_cv_file
 from app.services.llm import parse_cv_with_llm
 import logging
@@ -196,3 +196,76 @@ async def get_parsed_cv(
         )
 
     return current_user.preferences['parsed_cv']
+
+
+@router.put("/cv/parsed")
+async def update_parsed_cv(
+    cv_data: ParsedCVUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Update parsed CV data
+
+    Allows editing of parsed CV fields:
+    - **name**: Full name
+    - **email**: Email address
+    - **phone**: Phone number
+    - **summary**: Professional summary
+    - **skills**: List of skills
+    - **experience**: Work experience array
+    - **education**: Education array
+    - **years_of_experience**: Total years of experience
+
+    This updates the parsed_cv data in preferences and also syncs
+    relevant fields to the main profile (name, skills, experience_years).
+    """
+    # Query user from database to ensure it's attached to the session
+    user = db.query(User).filter(User.id == current_user.id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    if not user.preferences or 'parsed_cv' not in user.preferences:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No parsed CV data found. Please upload a CV first."
+        )
+
+    # Get current parsed CV
+    parsed_cv = user.preferences['parsed_cv'].copy()
+
+    # Update only provided fields
+    update_data = cv_data.model_dump(exclude_unset=True)
+
+    for field, value in update_data.items():
+        parsed_cv[field] = value
+
+    # Update preferences with new parsed_cv
+    preferences = user.preferences.copy()
+    preferences['parsed_cv'] = parsed_cv
+    user.preferences = preferences
+
+    # Sync key fields to main profile
+    if 'name' in update_data:
+        user.full_name = update_data['name']
+
+    if 'skills' in update_data:
+        user.skills = update_data['skills']
+
+    if 'years_of_experience' in update_data:
+        user.experience_years = update_data['years_of_experience']
+
+    # Update timestamp
+    user.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(user)
+
+    # Invalidate user cache to ensure fresh data on next request
+    invalidate_user_cache(user.id)
+
+    return parsed_cv

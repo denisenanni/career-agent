@@ -185,6 +185,107 @@ def calculate_experience_match(user: User, job_requirements: Dict[str, Any]) -> 
         return 100.0  # Perfect match
 
 
+def calculate_title_match(user: User, job: Job) -> float:
+    """
+    Calculate match score for job title relevance
+
+    Uses user's target roles (from preferences) or infers from CV work history.
+    Prevents irrelevant matches (e.g., "Director" for ICs, "People Ops" for developers).
+
+    Returns:
+        Score 0-100
+    """
+    job_title_lower = job.title.lower()
+
+    # 1. Check if user specified target roles in preferences
+    user_prefs = user.preferences or {}
+    target_roles = user_prefs.get("target_roles", [])
+
+    # 2. If no target roles, infer from CV experience titles
+    if not target_roles and user_prefs.get("parsed_cv"):
+        parsed_cv = user_prefs["parsed_cv"]
+        experience = parsed_cv.get("experience", [])
+        if experience:
+            # Use most recent 3 job titles
+            target_roles = [exp.get("title", "") for exp in experience[:3] if exp.get("title")]
+
+    # 3. If still no target roles, use neutral score
+    if not target_roles:
+        return 50.0
+
+    # 4. Extract keywords from target roles and job title
+    # Common tech role keywords
+    engineer_keywords = ["engineer", "developer", "programmer", "software", "backend", "frontend", "fullstack", "full-stack", "sde"]
+    senior_keywords = ["senior", "sr", "lead", "principal", "staff"]
+    manager_keywords = ["manager", "director", "head", "chief", "vp", "cto", "ceo"]
+    designer_keywords = ["designer", "ux", "ui", "product design"]
+    data_keywords = ["data", "analyst", "scientist", "ml", "machine learning", "ai"]
+    devops_keywords = ["devops", "sre", "infrastructure", "platform", "cloud"]
+
+    # Normalize target roles
+    target_roles_lower = [role.lower() for role in target_roles]
+    target_roles_text = " ".join(target_roles_lower)
+
+    # 5. Check for role category match
+    user_is_engineer = any(kw in target_roles_text for kw in engineer_keywords)
+    user_is_manager = any(kw in target_roles_text for kw in manager_keywords)
+    user_is_designer = any(kw in target_roles_text for kw in designer_keywords)
+    user_is_data = any(kw in target_roles_text for kw in data_keywords)
+    user_is_devops = any(kw in target_roles_text for kw in devops_keywords)
+
+    job_is_engineer = any(kw in job_title_lower for kw in engineer_keywords)
+    job_is_manager = any(kw in job_title_lower for kw in manager_keywords)
+    job_is_designer = any(kw in job_title_lower for kw in designer_keywords)
+    job_is_data = any(kw in job_title_lower for kw in data_keywords)
+    job_is_devops = any(kw in job_title_lower for kw in devops_keywords)
+
+    # 6. Calculate score based on role category alignment
+    score = 0.0
+
+    # Strong mismatch penalties
+    if user_is_engineer and job_is_manager and not job_is_engineer:
+        # IC engineer shouldn't match pure management roles
+        return 10.0
+    if user_is_manager and not job_is_manager:
+        # Manager shouldn't match pure IC roles (unless it's also management)
+        return 30.0
+
+    # Category matches
+    if user_is_engineer and job_is_engineer:
+        score = 90.0
+    elif user_is_designer and job_is_designer:
+        score = 90.0
+    elif user_is_data and job_is_data:
+        score = 90.0
+    elif user_is_devops and job_is_devops:
+        score = 90.0
+    elif user_is_manager and job_is_manager:
+        score = 90.0
+    else:
+        # Check for keyword overlap
+        target_words = set(target_roles_text.split())
+        job_words = set(job_title_lower.split())
+        overlap = target_words.intersection(job_words)
+
+        if len(overlap) >= 2:
+            score = 70.0  # Good keyword overlap
+        elif len(overlap) == 1:
+            score = 50.0  # Some overlap
+        else:
+            score = 20.0  # No clear match
+
+    # 7. Seniority alignment bonus/penalty
+    user_is_senior = any(kw in target_roles_text for kw in senior_keywords)
+    job_is_senior = any(kw in job_title_lower for kw in senior_keywords)
+
+    if user_is_senior and job_is_senior:
+        score = min(100.0, score + 10.0)  # Bonus for seniority match
+    elif user_is_senior and not job_is_senior:
+        score = max(0.0, score - 10.0)  # Slight penalty for seniority mismatch
+
+    return round(score, 2)
+
+
 def calculate_match_score(
     user: User,
     job: Job,
@@ -208,22 +309,26 @@ def calculate_match_score(
 
     # Calculate individual scores
     skill_score, matching_skills, missing_skills = calculate_skill_match(user_skills, job_requirements)
+    title_score = calculate_title_match(user, job)
     work_type_score = calculate_work_type_match(user_prefs, job)
     location_score = calculate_location_match(user_prefs, job)
     salary_score = calculate_salary_match(user_prefs, job)
     experience_score = calculate_experience_match(user, job_requirements)
 
     # Weighted average (total = 100%)
+    # Title matching is critical - prevent irrelevant role matches
     weights = {
-        "skills": 0.45,          # 45%
-        "work_type": 0.15,       # 15%
-        "location": 0.15,        # 15%
+        "skills": 0.35,          # 35% (reduced from 45%)
+        "title": 0.20,           # 20% (NEW - prevents "Director" for ICs)
+        "work_type": 0.10,       # 10% (reduced from 15%)
+        "location": 0.10,        # 10% (reduced from 15%)
         "salary": 0.10,          # 10%
         "experience": 0.15,      # 15%
     }
 
     overall_score = (
         skill_score * weights["skills"] +
+        title_score * weights["title"] +
         work_type_score * weights["work_type"] +
         location_score * weights["location"] +
         salary_score * weights["salary"] +
@@ -233,6 +338,7 @@ def calculate_match_score(
     analysis = {
         "overall_score": round(overall_score, 2),
         "skill_score": round(skill_score, 2),
+        "title_score": round(title_score, 2),
         "work_type_score": round(work_type_score, 2),
         "location_score": round(location_score, 2),
         "salary_score": round(salary_score, 2),

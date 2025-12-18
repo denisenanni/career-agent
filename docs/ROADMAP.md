@@ -110,66 +110,72 @@ terraform {
 
 ## Database Schema
 
+**Note:** Actual implementation uses a single `users` table (simpler for MVP) instead of separate `profiles` table.
+
 ```sql
--- Users (simple for MVP)
+-- Users (includes profile data for simplicity)
 CREATE TABLE users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id SERIAL PRIMARY KEY,
+  -- Auth
   email VARCHAR(255) UNIQUE NOT NULL,
-  password_hash VARCHAR(255) NOT NULL,
+  hashed_password VARCHAR(255) NOT NULL,
+  is_active BOOLEAN DEFAULT TRUE,
+
+  -- Profile
+  full_name VARCHAR(255),
+  bio TEXT,
+  skills JSONB DEFAULT '[]',  -- List of skills
+  experience_years INTEGER,
+
+  -- Preferences (includes parsed_cv data)
+  preferences JSONB DEFAULT '{}',  -- Job preferences + parsed_cv
+
+  -- CV
+  cv_text TEXT,  -- Extracted CV text
+  cv_filename VARCHAR(255),
+  cv_uploaded_at TIMESTAMP,
+
+  -- Timestamps
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- Profiles
-CREATE TABLE profiles (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  raw_cv_text TEXT,
-  parsed_cv JSONB,
-  skills TEXT[],
-  experience_years INTEGER,
-  preferences JSONB DEFAULT '{}',
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(user_id)
-);
-
 -- Jobs
 CREATE TABLE jobs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id SERIAL PRIMARY KEY,
   source VARCHAR(50) NOT NULL,
-  source_id VARCHAR(255) NOT NULL,
+  source_id VARCHAR(255) NOT NULL UNIQUE,
   url VARCHAR(500) NOT NULL,
   title VARCHAR(255) NOT NULL,
-  company VARCHAR(255),
-  description TEXT,
+  company VARCHAR(255) NOT NULL,
+  description TEXT NOT NULL,
   salary_min INTEGER,
   salary_max INTEGER,
   salary_currency VARCHAR(10) DEFAULT 'USD',
-  location VARCHAR(255),
-  remote_type VARCHAR(50),
-  job_type VARCHAR(50),
-  contract_duration VARCHAR(100),
-  requirements JSONB,
-  tags TEXT[],
+  location VARCHAR(255) DEFAULT 'Remote',
+  remote_type VARCHAR(50) DEFAULT 'full',
+  job_type VARCHAR(50) DEFAULT 'permanent',
+  tags JSONB DEFAULT '[]',
   raw_data JSONB,
+  posted_at TIMESTAMP,
   scraped_at TIMESTAMP DEFAULT NOW(),
-  expires_at TIMESTAMP,
-  UNIQUE(source, source_id)
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  search_vector TSVECTOR  -- Full-text search vector (auto-updated by trigger)
 );
 
 -- Matches
 CREATE TABLE matches (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
-  match_score DECIMAL(5,2),
-  skill_matches TEXT[],
-  skill_gaps TEXT[],
-  analysis JSONB,
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE,
+  score DECIMAL(5,2),
+  reasoning JSONB,  -- Detailed match analysis
+  analysis TEXT,
   status VARCHAR(50) DEFAULT 'new',
   cover_letter TEXT,
   cv_highlights TEXT,
+  generated_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
   UNIQUE(user_id, job_id)
@@ -177,7 +183,7 @@ CREATE TABLE matches (
 
 -- Scrape logs
 CREATE TABLE scrape_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id SERIAL PRIMARY KEY,
   source VARCHAR(50) NOT NULL,
   started_at TIMESTAMP DEFAULT NOW(),
   completed_at TIMESTAMP,
@@ -188,8 +194,8 @@ CREATE TABLE scrape_logs (
 );
 
 CREATE TABLE skill_analysis (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
   analysis_date TIMESTAMP DEFAULT NOW(),
   market_skills JSONB,
   user_skills JSONB,
@@ -197,13 +203,21 @@ CREATE TABLE skill_analysis (
   recommendations JSONB,
   jobs_analyzed INTEGER,
   UNIQUE(user_id)
-)
+);
 
 -- Indexes
 CREATE INDEX idx_jobs_source ON jobs(source);
+CREATE INDEX idx_jobs_title ON jobs(title);
+CREATE INDEX idx_jobs_company ON jobs(company);
+CREATE INDEX idx_jobs_source_id ON jobs(source_id);
 CREATE INDEX idx_jobs_scraped_at ON jobs(scraped_at DESC);
+CREATE INDEX idx_jobs_search_vector ON jobs USING GIN(search_vector);
 CREATE INDEX idx_matches_user_id ON matches(user_id);
-CREATE INDEX idx_matches_score ON matches(match_score DESC);
+CREATE INDEX idx_matches_job_id ON matches(job_id);
+CREATE INDEX idx_matches_score ON matches(score DESC);
+CREATE INDEX idx_matches_user_score ON matches(user_id, score DESC);
+CREATE INDEX idx_matches_user_status ON matches(user_id, status);
+CREATE INDEX idx_users_email ON users(email);
 ```
 
 ---
@@ -728,10 +742,28 @@ Return only the JSON array.
 ### Phase 7.1: Pre production checks and final adjustments
 **Tasks:**
 1. CHeck JWT implementation
-2. editable profile/skills. How to allow the user to edit the informations obtianed from parsing?
-3. Search in jobs doesn't work? with search parameters i get 500 (example http://localhost:8000/api/jobs?search=lead&limit=50)
-4. Add some more matching parameters (like job title) because i get matches for Director People Ops for example, and i'm a software developer
-3. More tests
+2. editable profile/skills. How to allow the user to edit the informations obtianed from parsing? :done
+3. Search in jobs doesn't work? with search parameters i get 500 (example http://localhost:8000/api/jobs?search=lead&limit=50): solved
+4. Add some more matching parameters (like job title) because i get matches for Director People Ops for example, and i'm a software developer: :done
+   - Added `calculate_title_match()` function (20% weight in overall matching score)
+   - Uses `target_roles` from preferences OR infers from CV experience titles
+   - Category-based matching: engineer, manager, designer, data, devops
+   - Strong penalties for role mismatches (e.g., Engineer matching Director = 10% score)
+   - Updated weights: Skills 35%, Title 20%, Experience 15%, Work type 10%, Location 10%, Salary 10%
+5. Improve skills UI with autocomplete/dropdown: :done
+   - Created `SkillAutocompleteModal` component with dynamic skills from job database
+   - **NEW:** `GET /api/skills/popular` endpoint - extracts skills from real job tags + custom skills
+   - **NEW:** `POST /api/skills/custom` endpoint - save custom skills to database
+   - **NEW:** `custom_skills` table - tracks user-contributed skills with usage count
+   - Skills sourced from actual job market data (not hardcoded)
+   - Custom skills automatically saved and appear for all users
+   - Skill usage count incremented when multiple users add same custom skill
+   - Searchable/filterable dropdown with keyboard navigation (arrow keys, Enter, Escape)
+   - Loading state with fallback list
+   - Prevents duplicate skills
+   - Beautiful UI with hover states and highlighting
+   - Replaced browser prompt() in `ParsedCVDisplay`
+6. More tests
 
 
 ## File Structure
@@ -745,18 +777,26 @@ career-agent/
 │   │   │   ├── JobCard.tsx
 │   │   │   ├── MatchCard.tsx
 │   │   │   ├── CVUpload.tsx
-│   │   │   └── Filters.tsx
+│   │   │   ├── ParsedCVDisplay.tsx
+│   │   │   ├── PreferencesForm.tsx
+│   │   │   ├── ApplicationMaterialsModal.tsx
+│   │   │   └── ProtectedRoute.tsx
 │   │   ├── pages/
 │   │   │   ├── HomePage.tsx
 │   │   │   ├── JobsPage.tsx
 │   │   │   ├── MatchesPage.tsx
-│   │   │   └── ProfilePage.tsx
-│   │   ├── hooks/
-│   │   │   ├── useJobs.ts
-│   │   │   ├── useMatches.ts
-│   │   │   └── useProfile.ts
+│   │   │   ├── ProfilePage.tsx
+│   │   │   ├── InsightsPage.tsx
+│   │   │   ├── LoginPage.tsx
+│   │   │   └── RegisterPage.tsx
+│   │   ├── contexts/
+│   │   │   └── AuthContext.tsx
 │   │   ├── api/
-│   │   │   └── client.ts
+│   │   │   ├── auth.ts
+│   │   │   ├── jobs.ts
+│   │   │   ├── matches.ts
+│   │   │   ├── profile.ts
+│   │   │   └── insights.ts
 │   │   └── types/
 │   │       └── index.ts
 │   └── ...
@@ -766,10 +806,36 @@ career-agent/
 │   │   ├── config.py
 │   │   ├── database.py
 │   │   ├── models/
+│   │   │   ├── user.py
+│   │   │   ├── job.py
+│   │   │   ├── match.py
+│   │   │   ├── scrape_log.py
+│   │   │   └── skill_analysis.py
 │   │   ├── routers/
+│   │   │   ├── auth.py
+│   │   │   ├── jobs.py
+│   │   │   ├── matches.py
+│   │   │   ├── profile.py
+│   │   │   ├── insights.py
+│   │   │   └── health.py
 │   │   ├── services/
-│   │   └── llm/
-│   ├── alembic/
+│   │   │   ├── llm.py
+│   │   │   ├── matching.py
+│   │   │   ├── generation.py
+│   │   │   ├── insights.py
+│   │   │   ├── redis_cache.py
+│   │   │   └── scraper.py
+│   │   ├── schemas/
+│   │   │   └── (pydantic schemas)
+│   │   ├── dependencies/
+│   │   │   └── auth.py
+│   │   └── utils/
+│   │       └── cv_parser.py
+│   ├── migrations/
+│   │   └── versions/
+│   ├── tests/
+│   │   ├── unit/
+│   │   └── integration/
 │   └── requirements.txt
 ├── scraping/
 │   └── scrapers/
@@ -781,6 +847,8 @@ career-agent/
 │       ├── variables.tf
 │       ├── outputs.tf
 │       └── providers.tf
+├── docs/
+│   └── ROADMAP.md
 ├── docker-compose.yml
 ├── package.json
 └── README.md

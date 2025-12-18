@@ -90,3 +90,26 @@ export async function getParsedCV(): Promise<ParsedCV> {
 
   return response.json()
 }
+
+export async function updateParsedCV(data: Partial<ParsedCV>): Promise<ParsedCV> {
+  const token = getToken()
+  if (!token) {
+    throw new Error('Not authenticated')
+  }
+
+  const response = await fetch(`${API_URL}/api/profile/cv/parsed`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to update parsed CV')
+  }
+
+  return response.json()
+}
