@@ -1,12 +1,6 @@
 # Career Agent - Project Plan
 
-## Overview
-
-An AI-powered job hunting assistant that:
-1. Scrapes job boards for relevant postings
-2. Matches jobs against your CV and preferences
-3. Generates tailored cover letters and CV highlights
-4. Tracks applications and provides insights
+See **[README.md](../README.md)** for project overview, features, and quick start guide.
 
 **Repository:** https://github.com/denisenanni/career-agent
 
@@ -14,235 +8,70 @@ An AI-powered job hunting assistant that:
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                           FRONTEND                                   │
-│                    React + TypeScript + Vite                        │
-│                         (Vercel)                                    │
-└─────────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                           BACKEND                                    │
-│                    Python FastAPI (Railway)                         │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                 │
-│  │  Jobs API   │  │  Match API  │  │ Generate API│                 │
-│  └─────────────┘  └─────────────┘  └─────────────┘                 │
-└─────────────────────────────────────────────────────────────────────┘
-         │                   │                    │
-         ▼                   ▼                    ▼
-┌─────────────┐    ┌─────────────────┐    ┌─────────────┐
-│  PostgreSQL │    │   Redis Cache   │    │ Anthropic   │
-│  (Railway)  │    │   (Railway)     │    │ Claude API  │
-└─────────────┘    └─────────────────┘    └─────────────┘
-         ▲
-         │
-┌─────────────────────────────────────────────────────────────────────┐
-│                         SCRAPING WORKER                              │
-│                    Python + httpx (same backend)                    │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                 │
-│  │  RemoteOK   │  │ WeWorkRemote│  │  LinkedIn   │                 │
-│  └─────────────┘  └─────────────┘  └─────────────┘                 │
-└─────────────────────────────────────────────────────────────────────┘
-```
+The complete system architecture with diagrams, components, data flow, and infrastructure details is documented in **[ARCHITECTURE.md](./ARCHITECTURE.md)**.
+
+**High-level overview:**
+- **Frontend:** React + TypeScript + Vite (Vercel hosting)
+- **Backend:** Python FastAPI with three main APIs (Jobs, Matches, Generation)
+- **Data Layer:** PostgreSQL (storage) + Redis (caching)
+- **External Services:** Anthropic Claude API for AI features
+- **Scraping Worker:** Python + httpx for job board scraping
+
+**Key architectural features:**
+- Three-tier architecture with clear separation of concerns
+- Redis caching for 90%+ cost reduction on LLM operations
+- Stateless backend with JWT authentication
+- Full-text search with PostgreSQL TSVECTOR
+- Background job scraping with deduplication
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for complete details, data flows, performance optimizations, and scalability considerations.
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology | Notes |
-|-------|------------|-------|
-| Frontend | React + TypeScript + Vite + Tailwind | Already scaffolded |
-| Backend | Python FastAPI | Already scaffolded |
-| Database | PostgreSQL (Railway) | All-in-one platform |
-| Cache | Redis (Railway) | All-in-one platform |
-| LLM | Anthropic Claude API | Haiku for extraction, Sonnet for generation |
-| Scraping | httpx + Playwright | Start with httpx for APIs |
-| Infrastructure | Terraform | Railway + Vercel providers |
-| Frontend Hosting | Vercel | Free tier |
-| Backend Hosting | Railway | $5/month credit |
-
----
-
-## Infrastructure (Terraform)
-
-### Providers
-
-```hcl
-terraform {
-  required_providers {
-    railway = {
-      source  = "terraform-community-providers/railway"
-      version = "~> 0.4"
-    }
-    vercel = {
-      source  = "vercel/vercel"
-      version = "~> 1.0"
-    }
-  }
-}
-```
-
-### Railway resources
-
-1. **Project** - `career-agent-dev`
-2. **PostgreSQL service** - Database
-3. **Redis service** - Cache
-4. **Backend service** - FastAPI app (connected to GitHub repo)
-
-### Vercel resources
-
-1. **Project** - Frontend (connected to GitHub repo, root: `/frontend`)
-
-### Environment variables
-
-**Railway Backend Service:**
-- `DATABASE_URL` - Auto-injected from Railway Postgres
-- `REDIS_URL` - Auto-injected from Railway Redis
-- `ANTHROPIC_API_KEY` - From Anthropic console
-- `JWT_SECRET` - Generate with `openssl rand -base64 32`
-- `ENVIRONMENT` - `production`
-
-**Vercel Frontend:**
-- `VITE_API_URL` - Railway backend URL
+See **[README.md](../README.md#tech-stack)** for complete tech stack and **[ARCHITECTURE.md](./ARCHITECTURE.md)** for detailed infrastructure and cost estimates.
 
 ---
 
 ## Database Schema
 
-**Note:** Actual implementation uses a single `users` table (simpler for MVP) instead of separate `profiles` table.
+The complete database schema with all tables, indexes, relationships, and constraints is documented in **[SCHEMA.md](./SCHEMA.md)**.
 
-```sql
--- Users (includes profile data for simplicity)
-CREATE TABLE users (
-  id SERIAL PRIMARY KEY,
-  -- Auth
-  email VARCHAR(255) UNIQUE NOT NULL,
-  hashed_password VARCHAR(255) NOT NULL,
-  is_active BOOLEAN DEFAULT TRUE,
+**Tables:**
+- **users** - Authentication and profile data
+- **jobs** - Scraped job postings with full-text search
+- **matches** - Job matches with AI analysis and generated materials
+- **scrape_logs** - Scraping operation tracking
+- **skill_analysis** - Market analysis and recommendations per user
+- **custom_skills** - User-contributed skills for autocomplete
 
-  -- Profile
-  full_name VARCHAR(255),
-  bio TEXT,
-  skills JSONB DEFAULT '[]',  -- List of skills
-  experience_years INTEGER,
+**Key Features:**
+- PostgreSQL TSVECTOR for full-text search (with SQLite fallback for tests)
+- Composite unique constraints for data integrity
+- CASCADE deletes for clean data removal
+- Optimized indexes for common query patterns
+- JSON/JSONB columns for flexible data storage
 
-  -- Preferences (includes parsed_cv data)
-  preferences JSONB DEFAULT '{}',  -- Job preferences + parsed_cv
-
-  -- CV
-  cv_text TEXT,  -- Extracted CV text
-  cv_filename VARCHAR(255),
-  cv_uploaded_at TIMESTAMP,
-
-  -- Timestamps
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- Jobs
-CREATE TABLE jobs (
-  id SERIAL PRIMARY KEY,
-  source VARCHAR(50) NOT NULL,
-  source_id VARCHAR(255) NOT NULL UNIQUE,
-  url VARCHAR(500) NOT NULL,
-  title VARCHAR(255) NOT NULL,
-  company VARCHAR(255) NOT NULL,
-  description TEXT NOT NULL,
-  salary_min INTEGER,
-  salary_max INTEGER,
-  salary_currency VARCHAR(10) DEFAULT 'USD',
-  location VARCHAR(255) DEFAULT 'Remote',
-  remote_type VARCHAR(50) DEFAULT 'full',
-  job_type VARCHAR(50) DEFAULT 'permanent',
-  tags JSONB DEFAULT '[]',
-  raw_data JSONB,
-  posted_at TIMESTAMP,
-  scraped_at TIMESTAMP DEFAULT NOW(),
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  search_vector TSVECTOR  -- Full-text search vector (auto-updated by trigger)
-);
-
--- Matches
-CREATE TABLE matches (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-  job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE,
-  score DECIMAL(5,2),
-  reasoning JSONB,  -- Detailed match analysis
-  analysis TEXT,
-  status VARCHAR(50) DEFAULT 'new',
-  cover_letter TEXT,
-  cv_highlights TEXT,
-  generated_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(user_id, job_id)
-);
-
--- Scrape logs
-CREATE TABLE scrape_logs (
-  id SERIAL PRIMARY KEY,
-  source VARCHAR(50) NOT NULL,
-  started_at TIMESTAMP DEFAULT NOW(),
-  completed_at TIMESTAMP,
-  jobs_found INTEGER DEFAULT 0,
-  jobs_new INTEGER DEFAULT 0,
-  status VARCHAR(50) DEFAULT 'running',
-  error TEXT
-);
-
-CREATE TABLE skill_analysis (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-  analysis_date TIMESTAMP DEFAULT NOW(),
-  market_skills JSONB,
-  user_skills JSONB,
-  skill_gaps JSONB,
-  recommendations JSONB,
-  jobs_analyzed INTEGER,
-  UNIQUE(user_id)
-);
-
--- Indexes
-CREATE INDEX idx_jobs_source ON jobs(source);
-CREATE INDEX idx_jobs_title ON jobs(title);
-CREATE INDEX idx_jobs_company ON jobs(company);
-CREATE INDEX idx_jobs_source_id ON jobs(source_id);
-CREATE INDEX idx_jobs_scraped_at ON jobs(scraped_at DESC);
-CREATE INDEX idx_jobs_search_vector ON jobs USING GIN(search_vector);
-CREATE INDEX idx_matches_user_id ON matches(user_id);
-CREATE INDEX idx_matches_job_id ON matches(job_id);
-CREATE INDEX idx_matches_score ON matches(score DESC);
-CREATE INDEX idx_matches_user_score ON matches(user_id, score DESC);
-CREATE INDEX idx_matches_user_status ON matches(user_id, status);
-CREATE INDEX idx_users_email ON users(email);
-```
+See [SCHEMA.md](./SCHEMA.md) for complete details, field descriptions, and migration history.
 
 ---
 
 ## API Endpoints
 
-### Auth
-- `POST /auth/register` - Create account
-- `POST /auth/login` - Login (JWT)
-- `POST /auth/logout` - Logout
+The complete API reference with request/response schemas, authentication details, and examples is documented in **[API.md](./API.md)**.
 
-### Profile
-- `GET /api/profile` - Get user profile
-- `PUT /api/profile` - Update profile
-- `POST /api/profile/cv` - Upload and parse CV
+**Main API Groups:**
+- **Auth** - Registration, login, logout, user info
+- **Profile** - Profile management, CV upload/parsing, preferences
+- **Jobs** - Job listings with search/filters, job details, scraping trigger
+- **Matches** - Job matching, scoring, status tracking
+- **Generation** - Cover letter and CV highlights generation (with Redis caching)
+- **Insights** - Market analysis, skill recommendations
+- **Skills** - Popular skills autocomplete, custom skill management
+- **Health** - Backend and database health checks
 
-### Jobs
-- `GET /api/jobs` - List jobs (with filters)
-- `GET /api/jobs/{id}` - Get job details
-- `POST /api/jobs/refresh` - Trigger scrape
-
-### Matches
-- `GET /api/matches` - Get matched jobs for user
-- `POST /api/matches/{job_id}/generate` - Generate cover letter
-- `PUT /api/matches/{job_id}/status` - Update status
+See [API.md](./API.md) for complete endpoint documentation with examples, error codes, and rate limits.
 
 ---
 
@@ -534,7 +363,7 @@ Description: {description}
 
 **LLM Prompts:**
 
-**Cover Letter (Claude Sonnet 3.5):**
+**Cover Letter (Claude Sonnet 4.5):**
 ```
 Write a professional cover letter for this job application. Be genuine and personable while remaining professional.
 
@@ -569,7 +398,7 @@ INSTRUCTIONS:
 Write the cover letter:
 ```
 
-**CV Highlights (Claude Haiku):**
+**CV Highlights (Claude Haiku 4.5):**
 ```
 Extract and optimize the 3-5 most relevant experience bullet points from this candidate's CV for the target job.
 
@@ -642,8 +471,8 @@ Return only the JSON array.
   - Removed in-memory cache dictionaries
 
 - **Generation Service**: ✅ Complete
-  - `generate_cover_letter()` with Claude Sonnet 3.5
-  - `generate_cv_highlights()` with Claude Haiku
+  - `generate_cover_letter()` with Claude Sonnet 4.5
+  - `generate_cv_highlights()` with Claude Haiku 4.5
   - Both use Redis caching with 30-day TTL
   - Cache-first strategy: instant responses for cached content
 
@@ -875,150 +704,11 @@ Return only the JSON array.
 - Automated regression detection
 
 
-## File Structure
+## Related Documentation
 
-```
-career-agent/
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── Layout.tsx
-│   │   │   ├── JobCard.tsx
-│   │   │   ├── MatchCard.tsx
-│   │   │   ├── CVUpload.tsx
-│   │   │   ├── ParsedCVDisplay.tsx
-│   │   │   ├── PreferencesForm.tsx
-│   │   │   ├── ApplicationMaterialsModal.tsx
-│   │   │   └── ProtectedRoute.tsx
-│   │   ├── pages/
-│   │   │   ├── HomePage.tsx
-│   │   │   ├── JobsPage.tsx
-│   │   │   ├── MatchesPage.tsx
-│   │   │   ├── ProfilePage.tsx
-│   │   │   ├── InsightsPage.tsx
-│   │   │   ├── LoginPage.tsx
-│   │   │   └── RegisterPage.tsx
-│   │   ├── contexts/
-│   │   │   └── AuthContext.tsx
-│   │   ├── api/
-│   │   │   ├── auth.ts
-│   │   │   ├── jobs.ts
-│   │   │   ├── matches.ts
-│   │   │   ├── profile.ts
-│   │   │   └── insights.ts
-│   │   └── types/
-│   │       └── index.ts
-│   └── ...
-├── backend/
-│   ├── app/
-│   │   ├── main.py
-│   │   ├── config.py
-│   │   ├── database.py
-│   │   ├── models/
-│   │   │   ├── user.py
-│   │   │   ├── job.py
-│   │   │   ├── match.py
-│   │   │   ├── scrape_log.py
-│   │   │   └── skill_analysis.py
-│   │   ├── routers/
-│   │   │   ├── auth.py
-│   │   │   ├── jobs.py
-│   │   │   ├── matches.py
-│   │   │   ├── profile.py
-│   │   │   ├── insights.py
-│   │   │   └── health.py
-│   │   ├── services/
-│   │   │   ├── llm.py
-│   │   │   ├── matching.py
-│   │   │   ├── generation.py
-│   │   │   ├── insights.py
-│   │   │   ├── redis_cache.py
-│   │   │   └── scraper.py
-│   │   ├── schemas/
-│   │   │   └── (pydantic schemas)
-│   │   ├── dependencies/
-│   │   │   └── auth.py
-│   │   └── utils/
-│   │       └── cv_parser.py
-│   ├── migrations/
-│   │   └── versions/
-│   ├── tests/
-│   │   ├── unit/
-│   │   └── integration/
-│   └── requirements.txt
-├── scraping/
-│   └── scrapers/
-│       ├── remoteok.py
-│       └── weworkremotely.py
-├── infrastructure/
-│   └── terraform/
-│       ├── main.tf
-│       ├── variables.tf
-│       ├── outputs.tf
-│       └── providers.tf
-├── docs/
-│   └── ROADMAP.md
-├── docker-compose.yml
-├── package.json
-└── README.md
-```
+For technical details, infrastructure, and development guidelines, see:
 
----
-
-## API Keys Needed
-
-| Service | URL |
-|---------|-----|
-| Anthropic | https://console.anthropic.com/ |
-| Railway | https://railway.app/account/tokens |
-| Vercel | https://vercel.com/account/tokens |
-
----
-
-## Cost Estimate (Monthly)
-
-| Service | Cost |
-|---------|------|
-| Railway (Backend + Postgres + Redis) | $0-5 |
-| Vercel (Frontend) | $0 |
-| Anthropic API | $10-20 |
-| **Total** | **$10-25** |
-
----
-
-## Commands Reference
-
-```bash
-# Local development
-docker-compose up -d          # Start Postgres + Redis
-yarn install                  # Install frontend deps
-yarn backend:setup            # Set up Python venv
-yarn dev                      # Start frontend + backend
-
-# Database
-yarn db:migrate               # Run migrations
-
-# Terraform
-cd infrastructure/terraform
-terraform init
-terraform plan -var-file=dev.tfvars
-terraform apply -var-file=dev.tfvars
-
-# Testing scraper
-cd scraping
-python -m scrapers.remoteok
-```
-
----
-
-## Notes
-
-- Use Haiku for extraction (cheap), Sonnet for generation (quality)
-- Cache LLM results aggressively
-- RemoteOK has JSON API at https://remoteok.com/api
-- LinkedIn scraping is harder - save for later
-- Test locally before deploying
-- Commit frequently
-- do we use streaming with Claude chats? if not is it worth to implement?
-- redocs?
-- i want to add a functionality that allows the user to paste a job add (maybe something that didn't come from the job listing) and it si parsed and added  to a new entity that will represent job ads added by user, so visible just to that user, where will be performed the same analysis of the other jobs. It will tell the user what skills he need to develop, if any, to have more chances to be hired. This list of jobs should be shown in another section separated from the ones shows in 'Jobs'. so maybe another menu item or a section in profile
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Infrastructure, deployment, cost estimates, API keys
+- **[FILE_STRUCTURE.md](./FILE_STRUCTURE.md)** - Complete directory structure and organization
+- **[README.md](../README.md)** - Quick start, development workflow, common commands
+- **[DEV_NOTES.md](./DEV_NOTES.md)** - Development notes, future features, conventions, debugging tips

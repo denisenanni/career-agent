@@ -1,14 +1,21 @@
 # Career Agent
 
-AI-powered job hunting assistant that scrapes job boards, matches jobs to your profile, and generates tailored applications.
+An AI-powered job hunting assistant that:
+1. Scrapes job boards for relevant postings
+2. Matches jobs against your CV and preferences
+3. Generates tailored cover letters and CV highlights
+4. Tracks applications and provides insights
+
+**Repository:** https://github.com/denisenanni/career-agent
 
 ## Features
 
 - 🔍 **Job Scraping** - Automatically scrapes RemoteOK, WeWorkRemotely, and more
-- 📄 **CV Parsing** - Upload your CV and extract skills/experience
-- 🎯 **Smart Matching** - AI ranks jobs by compatibility with your profile
-- ✍️ **Application Generation** - Generate tailored cover letters and CV highlights
-- 📊 **Application Tracking** - Track your application status
+- 📄 **CV Parsing** - Upload your CV and extract skills/experience with Claude AI
+- 🎯 **Smart Matching** - AI-powered job ranking based on skills, experience, and preferences
+- ✍️ **Application Generation** - Generate personalized cover letters and tailored CV highlights
+- 📊 **Career Insights** - Market analysis and skill recommendations based on job trends
+- 📋 **Application Tracking** - Track your application status (matched, interested, applied)
 
 ## Tech Stack
 
@@ -198,6 +205,30 @@ source ../backend/.venv/bin/activate
 python -m scrapers.remoteok
 ```
 
+### Common Commands
+
+```bash
+# Local development
+docker-compose up -d          # Start Postgres + Redis
+yarn install                  # Install frontend deps
+yarn backend:setup            # Set up Python venv
+yarn dev                      # Start frontend + backend
+
+# Database
+yarn db:migrate               # Run migrations
+alembic revision --autogenerate -m "description"  # Create migration
+
+# Testing
+cd backend && pytest          # Run backend tests
+cd frontend && yarn test      # Run frontend tests
+
+# Scraping
+cd scraping
+python -m scrapers.remoteok   # Test RemoteOK scraper
+```
+
+---
+
 ## Deployment
 
 ### Production Infrastructure (Terraform)
@@ -256,36 +287,26 @@ railway up
 
 ## Project Structure
 
-```
-career-agent/
-├── frontend/           # React + TypeScript + Vite
-│   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── hooks/
-│   │   ├── api/
-│   │   └── types/
-│   └── ...
-├── backend/            # Python FastAPI
-│   ├── app/
-│   │   ├── routers/
-│   │   ├── models/
-│   │   ├── services/
-│   │   └── ...
-│   └── requirements.txt
-├── scraping/           # Job scrapers
-│   └── scrapers/
-├── shared/             # Shared TypeScript types
-├── infrastructure/     # Terraform configs
-│   └── terraform/
-├── docs/               # Documentation
-│   └── ROADMAP.md
-└── docker-compose.yml  # Local dev services
-```
+Monorepo with separate frontend, backend, scraping scripts, and infrastructure code.
 
-## Roadmap
+**Main Directories:**
+- **`frontend/`** - React + TypeScript + Vite (UI components, pages, API clients)
+- **`backend/`** - Python FastAPI (API routers, models, services, migrations, tests)
+- **`scraping/`** - Job board scrapers (RemoteOK, WeWorkRemotely, etc.)
+- **`infrastructure/`** - Terraform configuration for Railway + Vercel
+- **`docs/`** - Complete project documentation
+- **`docker-compose.yml`** - PostgreSQL + Redis for local development
 
-See [docs/ROADMAP.md](docs/ROADMAP.md) for detailed roadmap and architecture.
+See **[FILE_STRUCTURE.md](docs/FILE_STRUCTURE.md)** for complete directory trees with detailed file-by-file descriptions.
+
+## Documentation
+
+- **[ROADMAP.md](docs/ROADMAP.md)** - Project phases, implementation plan, and progress tracking
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture, components, data flows, infrastructure, and costs
+- **[API.md](docs/API.md)** - Complete API reference with examples and authentication
+- **[SCHEMA.md](docs/SCHEMA.md)** - Database schema, tables, indexes, and relationships
+- **[FILE_STRUCTURE.md](docs/FILE_STRUCTURE.md)** - Project directory structure and organization
+- **[DEV_NOTES.md](docs/DEV_NOTES.md)** - Development notes, conventions, debugging tips, and future features
 
 ## License
 
