@@ -1,21 +1,33 @@
 # Node
-node_modules
+node_modules/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Environment variables
 .env
+.env.local
+.env.*.local
 ./backend/.env
 ./frontend/.env
 
 # Python
 ./backend/.venv
+venv/
+env/
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
 *.egg-info/
-dist/
 build/
+*.log
+
+# Frontend build
+frontend/dist/
+frontend/build/
 
 # IDEs
 .vscode/
@@ -23,16 +35,31 @@ build/
 *.swp
 *.swo
 *~
+.project
+.classpath
+.settings/
 
 # OS
 .DS_Store
 Thumbs.db
+*.bak
+*.tmp
 
-# Testing
+# Testing & Coverage
 htmlcov/
 .coverage
+.coverage.*
 .pytest_cache/
+.tox/
+.hypothesis/
+*.cover
+.cache
 
 # Alembic
 # Keep migrations, but ignore pycache
 backend/migrations/versions/__pycache__/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
