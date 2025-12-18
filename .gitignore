@@ -1,5 +1,38 @@
+# Node
 node_modules
+
+# Environment variables
 .env
 ./backend/.env
-./backend/.venv
 ./frontend/.env
+
+# Python
+./backend/.venv
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+htmlcov/
+.coverage
+.pytest_cache/
+
+# Alembic
+# Keep migrations, but ignore pycache
+backend/migrations/versions/__pycache__/
