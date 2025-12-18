@@ -179,3 +179,37 @@ EDUCATION
 Bachelor of Science in Computer Science
 University of Technology | 2018
 """
+
+
+@pytest.fixture
+def client(db_session: Session):
+    """FastAPI test client with database override"""
+    from fastapi.testclient import TestClient
+    from app.database import get_db
+
+    def override_get_db():
+        try:
+            yield db_session
+        finally:
+            pass
+
+    from app.main import app
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def authenticated_client(client, test_user):
+    """Client with authentication token"""
+    # Login to get token
+    response = client.post(
+        "/auth/login",
+        json={"email": "test@example.com", "password": "testpassword123"}
+    )
+    token = response.json()["access_token"]
+
+    # Add token to client headers
+    client.headers = {"Authorization": f"Bearer {token}"}
+    return client

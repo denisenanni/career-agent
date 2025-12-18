@@ -52,8 +52,10 @@ class TestCVParsing:
             ]
         )
 
+    @patch('app.services.llm.cache_get', return_value=None)
+    @patch('app.services.llm.cache_set')
     @patch('app.services.llm.client')
-    def test_parse_cv_success(self, mock_client, sample_cv_text, mock_claude_response):
+    def test_parse_cv_success(self, mock_client, mock_cache_set, mock_cache_get, sample_cv_text, mock_claude_response):
         """Test successful CV parsing"""
         mock_client.messages.create.return_value = mock_claude_response
 
@@ -75,8 +77,10 @@ class TestCVParsing:
         assert call_kwargs["temperature"] == 0
         assert sample_cv_text in call_kwargs["messages"][0]["content"]
 
+    @patch('app.services.llm.cache_get', return_value=None)
+    @patch('app.services.llm.cache_set')
     @patch('app.services.llm.client')
-    def test_parse_cv_with_markdown_wrapper(self, mock_client, sample_cv_text):
+    def test_parse_cv_with_markdown_wrapper(self, mock_client, mock_cache_set, mock_cache_get, sample_cv_text):
         """Test parsing when Claude returns JSON wrapped in markdown"""
         # Mock response with markdown code block
         mock_response = Mock(
@@ -94,8 +98,10 @@ class TestCVParsing:
         assert result["name"] == "Jane Doe"
         assert result["email"] == "jane@example.com"
 
+    @patch('app.services.llm.cache_get', return_value=None)
+    @patch('app.services.llm.cache_set')
     @patch('app.services.llm.client')
-    def test_parse_cv_invalid_json(self, mock_client, sample_cv_text):
+    def test_parse_cv_invalid_json(self, mock_client, mock_cache_set, mock_cache_get, sample_cv_text):
         """Test handling of invalid JSON response"""
         mock_response = Mock(
             content=[Mock(text="This is not valid JSON")]
@@ -106,8 +112,10 @@ class TestCVParsing:
 
         assert result is None
 
+    @patch('app.services.llm.cache_get', return_value=None)
+    @patch('app.services.llm.cache_set')
     @patch('app.services.llm.client')
-    def test_parse_cv_api_error(self, mock_client, sample_cv_text):
+    def test_parse_cv_api_error(self, mock_client, mock_cache_set, mock_cache_get, sample_cv_text):
         """Test handling of API errors"""
         mock_client.messages.create.side_effect = Exception("API Error")
 
@@ -122,8 +130,10 @@ class TestCVParsing:
 
         assert result is None
 
+    @patch('app.services.llm.cache_get', return_value=None)
+    @patch('app.services.llm.cache_set')
     @patch('app.services.llm.client')
-    def test_parse_cv_prompt_structure(self, mock_client, sample_cv_text, mock_claude_response):
+    def test_parse_cv_prompt_structure(self, mock_client, mock_cache_set, mock_cache_get, sample_cv_text, mock_claude_response):
         """Test that the prompt has correct structure and instructions"""
         mock_client.messages.create.return_value = mock_claude_response
 
@@ -165,8 +175,10 @@ class TestJobRequirementExtraction:
             ]
         )
 
+    @patch('app.services.llm.cache_get', return_value=None)
+    @patch('app.services.llm.cache_set')
     @patch('app.services.llm.client')
-    def test_extract_job_requirements_success(self, mock_client, mock_job_response):
+    def test_extract_job_requirements_success(self, mock_client, mock_cache_set, mock_cache_get, mock_job_response):
         """Test successful job requirement extraction"""
         mock_client.messages.create.return_value = mock_job_response
 
@@ -185,8 +197,10 @@ class TestJobRequirementExtraction:
         assert result["job_type"] == "permanent"
         assert result["remote_type"] == "full"
 
+    @patch('app.services.llm.cache_get', return_value=None)
+    @patch('app.services.llm.cache_set')
     @patch('app.services.llm.client')
-    def test_extract_job_requirements_prompt_structure(self, mock_client, mock_job_response):
+    def test_extract_job_requirements_prompt_structure(self, mock_client, mock_cache_set, mock_cache_get, mock_job_response):
         """Test that job extraction prompt is correctly structured"""
         mock_client.messages.create.return_value = mock_job_response
 
@@ -207,8 +221,10 @@ class TestJobRequirementExtraction:
         assert "nice_to_have_skills" in prompt
         assert "remote_type" in prompt
 
+    @patch('app.services.llm.cache_get', return_value=None)
+    @patch('app.services.llm.cache_set')
     @patch('app.services.llm.client')
-    def test_extract_job_requirements_with_nulls(self, mock_client):
+    def test_extract_job_requirements_with_nulls(self, mock_client, mock_cache_set, mock_cache_get):
         """Test extraction when some fields are null"""
         mock_response = Mock(
             content=[
@@ -239,8 +255,10 @@ class TestJobRequirementExtraction:
         assert result["experience_years_max"] is None
         assert result["education"] is None
 
+    @patch('app.services.llm.cache_get', return_value=None)
+    @patch('app.services.llm.cache_set')
     @patch('app.services.llm.client')
-    def test_extract_job_invalid_json(self, mock_client):
+    def test_extract_job_invalid_json(self, mock_client, mock_cache_set, mock_cache_get):
         """Test handling invalid JSON in job extraction"""
         mock_response = Mock(
             content=[Mock(text="Not valid JSON")]
@@ -255,8 +273,10 @@ class TestJobRequirementExtraction:
 class TestLLMServiceConfiguration:
     """Test LLM service configuration and error handling"""
 
+    @patch('app.services.llm.cache_get', return_value=None)
+    @patch('app.services.llm.cache_set')
     @patch('app.services.llm.client')
-    def test_uses_haiku_model(self, mock_client, sample_cv_text):
+    def test_uses_haiku_model(self, mock_client, mock_cache_set, mock_cache_get, sample_cv_text):
         """Verify that Haiku model is used for extraction (cost optimization)"""
         mock_response = Mock(
             content=[Mock(text='{"name": "Test", "skills": [], "experience": [], "education": [], "years_of_experience": 0}')]
@@ -268,8 +288,10 @@ class TestLLMServiceConfiguration:
         call_kwargs = mock_client.messages.create.call_args[1]
         assert call_kwargs["model"] == "claude-haiku-4-5-20251001"
 
+    @patch('app.services.llm.cache_get', return_value=None)
+    @patch('app.services.llm.cache_set')
     @patch('app.services.llm.client')
-    def test_uses_zero_temperature(self, mock_client, sample_cv_text):
+    def test_uses_zero_temperature(self, mock_client, mock_cache_set, mock_cache_get, sample_cv_text):
         """Verify that temperature is 0 for deterministic extraction"""
         mock_response = Mock(
             content=[Mock(text='{"name": "Test", "skills": [], "experience": [], "education": [], "years_of_experience": 0}')]
@@ -281,8 +303,10 @@ class TestLLMServiceConfiguration:
         call_kwargs = mock_client.messages.create.call_args[1]
         assert call_kwargs["temperature"] == 0
 
+    @patch('app.services.llm.cache_get', return_value=None)
+    @patch('app.services.llm.cache_set')
     @patch('app.services.llm.client')
-    def test_max_tokens_reasonable(self, mock_client, sample_cv_text):
+    def test_max_tokens_reasonable(self, mock_client, mock_cache_set, mock_cache_get, sample_cv_text):
         """Verify max_tokens is set appropriately"""
         mock_response = Mock(
             content=[Mock(text='{"name": "Test", "skills": [], "experience": [], "education": [], "years_of_experience": 0}')]
