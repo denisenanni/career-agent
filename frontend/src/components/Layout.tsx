@@ -1,30 +1,41 @@
-import { useState } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { Briefcase, Target, User, Home, LogOut, LogIn, TrendingUp, FileText, Menu, X } from 'lucide-react'
-import { clsx } from 'clsx'
-import { useAuth } from '../contexts/AuthContext'
+import { useState } from "react";
+import { Outlet, NavLink, useNavigate } from "react-router-dom";
+import {
+  Briefcase,
+  Target,
+  User,
+  Home,
+  LogOut,
+  LogIn,
+  TrendingUp,
+  FileText,
+  Menu,
+  X,
+} from "lucide-react";
+import { clsx } from "clsx";
+import { useAuth } from "../contexts/AuthContext";
 
 const navItems = [
-  { to: '/', label: 'Home', icon: Home },
-  { to: '/jobs', label: 'Jobs', icon: Briefcase },
-  { to: '/my-jobs', label: 'My Jobs', icon: FileText },
-  { to: '/matches', label: 'Matches', icon: Target },
-  { to: '/insights', label: 'Insights', icon: TrendingUp },
-  { to: '/profile', label: 'Profile', icon: User },
-]
+  { to: "/", label: "Home", icon: Home },
+  { to: "/jobs", label: "Jobs", icon: Briefcase },
+  { to: "/my-jobs", label: "My Jobs", icon: FileText },
+  { to: "/matches", label: "Matches", icon: Target },
+  { to: "/insights", label: "Insights", icon: TrendingUp },
+  { to: "/profile", label: "Profile", icon: User },
+];
 
 export function Layout() {
-  const { user, logout } = useAuth()
-  const navigate = useNavigate()
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleLogout = async () => {
-    await logout()
-    navigate('/login')
-    setMobileMenuOpen(false)
-  }
+    await logout();
+    navigate("/login");
+    setMobileMenuOpen(false);
+  };
 
-  const closeMobileMenu = () => setMobileMenuOpen(false)
+  const closeMobileMenu = () => setMobileMenuOpen(false);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -32,7 +43,12 @@ export function Layout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex">
-              <div className="flex-shrink-0 flex items-center">
+              <div className="flex-shrink-0 flex items-center gap-3">
+                <img
+                  src="/logo.svg"
+                  alt="Career Agent Logo"
+                  className="h-10 w-10"
+                />
                 <span className="text-xl font-bold text-indigo-600">
                   Career Agent
                 </span>
@@ -45,10 +61,10 @@ export function Layout() {
                     to={item.to}
                     className={({ isActive }) =>
                       clsx(
-                        'inline-flex items-center px-3 py-2 text-sm font-medium rounded-md',
+                        "inline-flex items-center px-3 py-2 text-sm font-medium rounded-md",
                         isActive
-                          ? 'bg-indigo-100 text-indigo-700'
-                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                          ? "bg-indigo-100 text-indigo-700"
+                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
                       )
                     }
                   >
@@ -63,7 +79,9 @@ export function Layout() {
               <div className="hidden sm:flex items-center gap-4">
                 {user ? (
                   <>
-                    <span className="text-sm text-gray-600 truncate max-w-[150px]">{user.email}</span>
+                    <span className="text-sm text-gray-600 truncate max-w-[150px]">
+                      {user.email}
+                    </span>
                     <button
                       onClick={handleLogout}
                       className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md"
@@ -109,10 +127,10 @@ export function Layout() {
                   onClick={closeMobileMenu}
                   className={({ isActive }) =>
                     clsx(
-                      'flex items-center px-3 py-2 text-base font-medium rounded-md',
+                      "flex items-center px-3 py-2 text-base font-medium rounded-md",
                       isActive
-                        ? 'bg-indigo-100 text-indigo-700'
-                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                        ? "bg-indigo-100 text-indigo-700"
+                        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                     )
                   }
                 >
@@ -124,7 +142,9 @@ export function Layout() {
                 {user ? (
                   <>
                     <div className="px-3 py-2">
-                      <p className="text-sm font-medium text-gray-900 truncate">{user.email}</p>
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {user.email}
+                      </p>
                     </div>
                     <button
                       onClick={handleLogout}
@@ -162,5 +182,5 @@ export function Layout() {
         </div>
       </footer>
     </div>
-  )
+  );
 }
