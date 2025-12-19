@@ -423,10 +423,78 @@ yarn dev --debug
 - 📍 LinkedIn scraping is harder - save for later (not implemented)
 - 📋 Future features documented above: Streaming, User-submitted jobs
 
- other features
-- the percentage matches filter should be exclusive, meaning the filter with fair matches should filter just jobs with a match score between 60 and 69 included, filter good matched should include from 70% to 84%. Otherwise we see same stuff
-- i think the skills are not being saved from job posting
-- lets say that remote/onside should be a filter, and not have a weight in the matching, if the user set in profile just remote position the job are scraped already with this parameter
-- maybe the same can be done for all preferences? so when user saves preferences the jobs need to be refreshed if possible, also maybe when cv is updated
--understand what are skill1 and skill2 in database, and maybe delete them
-- maybe some filter on where they can/want employ the person? soe positions are just for US nationals
+## Recent Improvements (Completed)
+
+**Match Filtering & UX:**
+- ✅ Match percentage filters are now exclusive (60-69%, 70-84%, 85%+) - no more duplicate jobs across filters
+- ✅ Remote/onsite is now a hard filter (not a weighted score) - jobs filtered before matching
+- ✅ Skills ARE being saved from job postings (verified working correctly)
+- ✅ skill1/skill2 are just LLM prompt placeholders (no database cleanup needed)
+
+**Security & Code Quality:**
+- ✅ JWT_SECRET validation with production safeguards
+- ✅ Rate limiting on auth endpoints (5 registrations/hour, 10 logins/minute)
+- ✅ Timing attack prevention in login
+- ✅ CORS hardening with configurable origins
+- ✅ Redoc CDN version pinned (v2.1.3)
+- ✅ HTML template extracted for maintainability
+
+---
+
+## Future Improvements
+
+### Employment Eligibility Filter
+
+**Problem:** Some jobs are restricted to specific countries/regions (e.g., "US nationals only", "EU work authorization required")
+
+**Proposed Solution:**
+1. **LLM Extraction:**
+   - Update job requirements extraction prompt to detect eligibility restrictions
+   - Extract: `eligible_regions` (["US", "EU", "Worldwide", etc.])
+   - Extract: `visa_sponsorship` (true/false)
+
+2. **Database Schema:**
+   ```sql
+   ALTER TABLE jobs
+   ADD COLUMN eligible_regions JSONB DEFAULT '["Worldwide"]',
+   ADD COLUMN visa_sponsorship BOOLEAN DEFAULT NULL;
+   ```
+
+3. **User Profile:**
+   - Add `current_location` or `citizenship` to user preferences
+   - Add `needs_visa_sponsorship` boolean
+
+4. **Matching Logic:**
+   - Hard filter jobs by eligibility before creating matches
+   - Skip jobs where user's location doesn't match `eligible_regions`
+   - If user needs sponsorship, filter out jobs with `visa_sponsorship: false`
+
+**Example Prompts:**
+```
+Job posting text: "Must be authorized to work in the US. No visa sponsorship."
+Extracted: {
+  "eligible_regions": ["US"],
+  "visa_sponsorship": false
+}
+
+Job posting text: "Remote position, candidates from EU/US/Canada welcome. Visa sponsorship available."
+Extracted: {
+  "eligible_regions": ["EU", "US", "Canada"],
+  "visa_sponsorship": true
+}
+```
+
+**Priority:** Medium (after deployment)
+
+---
+
+### Auto-Refresh Matches on Profile Changes
+
+**Problem:** When user updates CV or preferences, matches aren't automatically refreshed
+
+**Solution:**
+- Trigger background job to recalculate matches after CV upload
+- Trigger background job after preferences update
+- Show notification: "Your matches are being refreshed..."
+
+**Priority:** Low (nice-to-have, deferred for now)

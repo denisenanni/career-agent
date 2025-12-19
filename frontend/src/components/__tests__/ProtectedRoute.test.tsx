@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import { ProtectedRoute } from '../ProtectedRoute'
-import * as AuthContext from '../../contexts/AuthContext'
 
 // Mock the useAuth hook
 const mockUseAuth = vi.fn()

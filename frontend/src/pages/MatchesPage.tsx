@@ -6,18 +6,45 @@ import type { MatchFilters } from '../types'
 
 export function MatchesPage() {
   const queryClient = useQueryClient()
-  const [minScore, setMinScore] = useState<number>(60)
+  const [scoreRange, setScoreRange] = useState<string>('60+')
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [limit] = useState(50)
   const [offset, setOffset] = useState(0)
 
-  // Memoize filters
-  const filters = useMemo<MatchFilters>(() => ({
-    min_score: minScore,
-    status: statusFilter || undefined,
-    limit,
-    offset,
-  }), [minScore, statusFilter, limit, offset])
+  // Memoize filters with exclusive score ranges
+  const filters = useMemo<MatchFilters>(() => {
+    let min_score: number | undefined
+    let max_score: number | undefined
+
+    switch (scoreRange) {
+      case 'all':
+        min_score = 0
+        break
+      case '60-69':
+        min_score = 60
+        max_score = 69
+        break
+      case '70-84':
+        min_score = 70
+        max_score = 84
+        break
+      case '85+':
+        min_score = 85
+        break
+      case '60+':
+      default:
+        min_score = 60
+        break
+    }
+
+    return {
+      min_score,
+      max_score,
+      status: statusFilter || undefined,
+      limit,
+      offset,
+    }
+  }, [scoreRange, statusFilter, limit, offset])
 
   // Fetch matches
   const { data, isLoading, error } = useQuery({
@@ -69,24 +96,25 @@ export function MatchesPage() {
       {/* Filters */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
         <div className="flex flex-wrap gap-4 items-end">
-          {/* Min Score Filter */}
+          {/* Score Range Filter */}
           <div className="flex-1 min-w-[200px]">
-            <label htmlFor="minScore" className="block text-sm font-medium text-gray-700 mb-1">
-              Minimum Match Score
+            <label htmlFor="scoreRange" className="block text-sm font-medium text-gray-700 mb-1">
+              Match Score Range
             </label>
             <select
-              id="minScore"
-              value={minScore}
+              id="scoreRange"
+              value={scoreRange}
               onChange={(e) => {
-                setMinScore(Number(e.target.value))
+                setScoreRange(e.target.value)
                 setOffset(0)
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
             >
-              <option value={0}>All Matches (0%+)</option>
-              <option value={60}>Fair Matches (60%+)</option>
-              <option value={70}>Good Matches (70%+)</option>
-              <option value={85}>Excellent Matches (85%+)</option>
+              <option value="all">All Matches (0%+)</option>
+              <option value="60+">All Good Matches (60%+)</option>
+              <option value="60-69">Fair Matches (60-69%)</option>
+              <option value="70-84">Good Matches (70-84%)</option>
+              <option value="85+">Excellent Matches (85%+)</option>
             </select>
           </div>
 
@@ -112,10 +140,10 @@ export function MatchesPage() {
           </div>
 
           {/* Clear Filters */}
-          {(minScore !== 60 || statusFilter) && (
+          {(scoreRange !== '60+' || statusFilter) && (
             <button
               onClick={() => {
-                setMinScore(60)
+                setScoreRange('60+')
                 setStatusFilter('')
                 setOffset(0)
               }}

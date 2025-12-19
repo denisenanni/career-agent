@@ -80,6 +80,7 @@ class RegenerateResponse(BaseModel):
 @router.get("", response_model=MatchListResponse)
 async def list_matches(
     min_score: Optional[float] = None,
+    max_score: Optional[float] = None,
     status: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
@@ -90,6 +91,7 @@ async def list_matches(
     List job matches for current user
 
     - **min_score**: Filter by minimum match score (0-100)
+    - **max_score**: Filter by maximum match score (0-100)
     - **status**: Filter by status (matched, interested, applied, rejected, hidden)
     - **limit**: Number of results per page (default 50, max 100)
     - **offset**: Pagination offset
@@ -104,6 +106,9 @@ async def list_matches(
     # Apply filters
     if min_score is not None:
         query = query.filter(Match.score >= min_score)
+
+    if max_score is not None:
+        query = query.filter(Match.score <= max_score)
 
     if status:
         query = query.filter(Match.status == status)

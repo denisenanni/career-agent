@@ -142,6 +142,7 @@ export interface MatchesResponse {
 
 export interface MatchFilters {
   min_score?: number
+  max_score?: number
   status?: string
   limit?: number
   offset?: number

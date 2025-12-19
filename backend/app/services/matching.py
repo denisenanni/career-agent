@@ -83,45 +83,55 @@ def calculate_work_type_match(user_preferences: Dict[str, Any], job: Job) -> flo
     return 0.0
 
 
+def should_match_remote_type(user_preferences: Dict[str, Any], job: Job) -> bool:
+    """
+    Hard filter: Check if job's remote type matches user preferences.
+
+    Remote type is treated as a filter (not a weighted score) because:
+    - Jobs are already filtered by remote type in the UI
+    - User can specify remote preferences upfront
+    - No point in showing jobs that don't match remote preference
+
+    Returns:
+        True if job should be matched, False to skip this job entirely
+    """
+    preferred_remote = user_preferences.get("remote_types", [])
+
+    # If no preference specified, accept all
+    if not preferred_remote:
+        return True
+
+    # Strict match: job must match one of the preferred remote types
+    return job.remote_type in preferred_remote
+
+
 def calculate_location_match(user_preferences: Dict[str, Any], job: Job) -> float:
     """
-    Calculate match score for location and remote type
+    Calculate match score for location/country preference only.
+
+    Note: remote_type is now handled as a hard filter (see should_match_remote_type)
 
     Returns:
         Score 0-100
     """
-    preferred_remote = user_preferences.get("remote_types", [])
     preferred_countries = user_preferences.get("preferred_countries", [])
 
-    remote_score = 100.0  # Default if no preference
-    location_score = 100.0  # Default if no preference
+    # If no country preference, perfect match
+    if not preferred_countries:
+        return 100.0
 
-    # Check remote type preference
-    if preferred_remote:
-        if job.remote_type in preferred_remote:
-            remote_score = 100.0
-        elif job.remote_type == "full" and "hybrid" in preferred_remote:
-            remote_score = 80.0  # Full remote is close to hybrid
-        elif job.remote_type == "hybrid" and "full" in preferred_remote:
-            remote_score = 60.0  # Hybrid is somewhat acceptable for full remote seekers
-        else:
-            remote_score = 0.0
+    job_location = (job.location or "").lower()
 
-    # Check country/location preference
-    if preferred_countries:
-        job_location = (job.location or "").lower()
+    # Check if "remote" is in preferences - matches any remote job
+    if "remote" in [c.lower() for c in preferred_countries] and job.remote_type == "full":
+        return 100.0
 
-        # Check if "remote" is in preferences - matches any remote job
-        if "remote" in [c.lower() for c in preferred_countries] and job.remote_type == "full":
-            location_score = 100.0
-        # Check if job location contains any preferred country
-        elif any(country.lower() in job_location for country in preferred_countries):
-            location_score = 100.0
-        else:
-            location_score = 30.0  # Partial score for location mismatch if remote-friendly
+    # Check if job location contains any preferred country
+    if any(country.lower() in job_location for country in preferred_countries):
+        return 100.0
 
-    # Average remote and location scores
-    return (remote_score + location_score) / 2
+    # Location mismatch
+    return 30.0
 
 
 def calculate_salary_match(user_preferences: Dict[str, Any], job: Job) -> float:
@@ -370,6 +380,12 @@ async def create_match_for_job(
         Match object if score >= min_score, None otherwise
     """
     try:
+        # Hard filter: Check remote type preference first (before expensive LLM call)
+        user_prefs = user.preferences or {}
+        if not should_match_remote_type(user_prefs, job):
+            logger.info(f"Job {job.id} remote_type '{job.remote_type}' doesn't match user {user.id} preferences")
+            return None
+
         # Extract job requirements using LLM
         job_requirements = extract_job_requirements(
             job_title=job.title,
