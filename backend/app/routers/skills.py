@@ -1,7 +1,7 @@
 """
 Skills router - popular skills aggregation from job tags and custom skills
 """
-from fastapi import APIRouter, Depends, Query, Body
+from fastapi import APIRouter, Depends, Query, Body, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text
 from typing import List
@@ -108,7 +108,14 @@ async def get_popular_skills(
 
 @router.post("/custom")
 async def add_custom_skill(
-    skill: str = Body(..., embed=True),
+    skill: str = Body(
+        ...,
+        embed=True,
+        min_length=1,
+        max_length=100,
+        pattern=r"^[a-zA-Z0-9+#.\-\s/()]+$",  # Allow alphanumeric, +, #, ., -, spaces, /, ()
+        description="Skill name (alphanumeric, spaces, and common tech chars like +, #, ., -, /, ())"
+    ),
     db: Session = Depends(get_db)
 ):
     """
@@ -117,15 +124,17 @@ async def add_custom_skill(
     When users add a skill that's not in job tags, save it so other users
     can discover it. Increments usage_count if skill already exists.
 
-    - **skill**: The skill name to add
+    - **skill**: The skill name to add (1-100 chars, alphanumeric and common tech symbols)
 
     Returns the skill and whether it was newly created
     """
     try:
         skill = skill.strip()
         if not skill:
-            logger.warning("Attempted to add empty skill")
-            return {"error": "Skill cannot be empty", "skill": "", "created": False, "usage_count": 0}
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Skill cannot be empty after trimming whitespace"
+            )
 
         logger.info(f"Attempting to add custom skill: {skill}")
 

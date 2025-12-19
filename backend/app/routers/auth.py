@@ -1,9 +1,11 @@
 """
 Authentication router - register, login, logout endpoints
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.database import get_db
 from app.models.user import User
@@ -12,10 +14,16 @@ from app.utils.auth import verify_password, get_password_hash, create_access_tok
 from app.dependencies.auth import get_current_user
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
-async def register(user_data: UserRegister, db: Session = Depends(get_db)):
+@limiter.limit("5/hour")  # Limit to 5 registration attempts per hour per IP
+async def register(
+    request: Request,
+    user_data: UserRegister,
+    db: Session = Depends(get_db)
+):
     """
     Register a new user account
 
@@ -59,7 +67,12 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-async def login(credentials: UserLogin, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")  # Limit to 10 login attempts per minute per IP
+async def login(
+    request: Request,
+    credentials: UserLogin,
+    db: Session = Depends(get_db)
+):
     """
     Login with email and password
 
@@ -71,15 +84,18 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
     # Find user by email
     user = db.query(User).filter(User.email == credentials.email).first()
 
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    # Always verify password even if user doesn't exist (constant-time operation)
+    # This prevents timing attacks that could enumerate valid email addresses
+    if user:
+        password_valid = verify_password(credentials.password, user.hashed_password)
+    else:
+        # Use a dummy hash to maintain constant time even when user doesn't exist
+        # bcrypt hash of "dummy_password" - ensures same computation time
+        dummy_hash = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5BI/0w8yJ3W6K"
+        verify_password(credentials.password, dummy_hash)
+        password_valid = False
 
-    # Verify password
-    if not verify_password(credentials.password, user.hashed_password):
+    if not user or not password_valid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",

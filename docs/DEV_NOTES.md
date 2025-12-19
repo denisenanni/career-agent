@@ -422,3 +422,11 @@ yarn dev --debug
 - 📍 RemoteOK has JSON API at https://remoteok.com/api (implemented)
 - 📍 LinkedIn scraping is harder - save for later (not implemented)
 - 📋 Future features documented above: Streaming, User-submitted jobs
+
+ other features
+- the percentage matches filter should be exclusive, meaning the filter with fair matches should filter just jobs with a match score between 60 and 69 included, filter good matched should include from 70% to 84%. Otherwise we see same stuff
+- i think the skills are not being saved from job posting
+- lets say that remote/onside should be a filter, and not have a weight in the matching, if the user set in profile just remote position the job are scraped already with this parameter
+- maybe the same can be done for all preferences? so when user saves preferences the jobs need to be refreshed if possible, also maybe when cv is updated
+-understand what are skill1 and skill2 in database, and maybe delete them
+- maybe some filter on where they can/want employ the person? soe positions are just for US nationals
