@@ -438,6 +438,23 @@ yarn dev --debug
 - ✅ CORS hardening with configurable origins
 - ✅ Redoc CDN version pinned (v2.1.3)
 - ✅ HTML template extracted for maintainability
+- ✅ Email allowlist for registration control (with admin API)
+
+---
+
+## Pending Features Checklist
+
+**Pre-Deployment Features:**
+- [ ] User-Submitted Jobs - Allow users to paste/add custom job postings
+- [ ] Employment Eligibility Filter - Geographic/visa restrictions
+- [ ] UI Polish - Loading states, errors, mobile responsiveness
+- [ ] Fix Remaining Tests - Get to 100% test coverage (21 backend tests failing)
+
+**Post-Deployment (Nice-to-Have):**
+- [ ] Auto-Refresh Matches - Trigger on CV/preferences update
+- [ ] Scheduled Scraping - Daily cron job for new jobs
+- [ ] Email Notifications - New matches, application reminders
+- [ ] Portfolio Write-up - Case study documentation
 
 ---
 

@@ -7,7 +7,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
-from app.routers import jobs, profile, matches, health, auth, insights, skills, admin
+from app.routers import jobs, profile, matches, health, auth, insights, skills, admin, user_jobs
 
 
 @asynccontextmanager
@@ -54,6 +54,7 @@ app.include_router(matches.router, prefix="/api/matches", tags=["matches"])
 app.include_router(insights.router, prefix="/api/insights", tags=["insights"])
 app.include_router(skills.router, prefix="/api/skills", tags=["skills"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+app.include_router(user_jobs.router, prefix="/api/user-jobs", tags=["user-jobs"])
 
 
 # Redoc HTML template with pinned CDN version

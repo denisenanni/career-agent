@@ -4,7 +4,7 @@ from datetime import datetime
 
 Base = declarative_base()
 
-__all__ = ["Base", "Job", "User", "Match", "ScrapeLog", "SkillAnalysis", "CustomSkill", "AllowedEmail"]
+__all__ = ["Base", "Job", "User", "Match", "ScrapeLog", "SkillAnalysis", "CustomSkill", "AllowedEmail", "UserJob"]
 
 from app.models.job import Job
 from app.models.user import User
@@ -13,3 +13,4 @@ from app.models.scrape_log import ScrapeLog
 from app.models.skill_analysis import SkillAnalysis
 from app.models.custom_skill import CustomSkill
 from app.models.allowed_email import AllowedEmail
+from app.models.user_job import UserJob
