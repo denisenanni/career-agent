@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI):
 
 
 # Initialize rate limiter
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=get_remote_address, enabled=settings.rate_limit_enabled)
 
 app = FastAPI(
     title="Career Agent API",

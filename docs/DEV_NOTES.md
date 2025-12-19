@@ -201,20 +201,34 @@ Pasted Job Text:
 - LLM cache hit rate: ~90% ✅
 - Full-text search: 5ms avg (95% faster than before) ✅
 - Cover letter generation: 2-5s (first time), <50ms (cached) ✅
-- Backend test coverage: 60% ✅
-- Frontend test coverage: Initial setup complete ✅
+- Backend test coverage: 60%+ ✅
+- Frontend test coverage: Initial setup complete with comprehensive tests ✅
+
+### Test Files Created
+**Frontend:**
+- `src/api/client.test.ts` - API client error handling (21 tests)
+- `src/components/MatchCard.test.tsx` - Match card with optimistic updates (20 tests)
+- `src/pages/LoginPage.test.tsx` - Login form validation (10 tests)
+- `src/pages/RegisterPage.test.tsx` - Registration form validation (15 tests)
+
+**Backend:**
+- `tests/integration/test_match_status_updates.py` - Match status updates (13 tests)
+- `tests/integration/test_preferences_merging.py` - Preferences merging fix (16 tests)
+- `tests/integration/test_cv_upload_flow.py` - CV upload integration (16 tests)
+- `tests/integration/test_allowlist.py` - Email allowlist feature (27 tests)
 
 ---
 
 ## Technical Debt
 
 ### High Priority
-- None currently blocking
+- Fix remaining test failures (some tests fail due to rate limiting, test isolation issues)
+- Production deployment (Railway + Vercel)
 
 ### Medium Priority
 - Add CI/CD pipeline (GitHub Actions)
-- Increase backend test coverage to 80%
-- Add more frontend component tests
+- Increase backend test coverage from 60% to 80%
+- Expand frontend component tests (more pages and components)
 - Set up error tracking (Sentry)
 - Add monitoring/observability (Railway metrics)
 
@@ -425,6 +439,35 @@ yarn dev --debug
 
 ## Recent Improvements (Completed)
 
+**UI Polish & Testing (December 19, 2024):**
+- ✅ Added loading states across the app (spinners, skeleton screens)
+- ✅ Centralized error handling with user-friendly messages
+  - Created `apiFetch()` wrapper with smart error parsing
+  - FastAPI validation error parsing (422 status)
+  - User-friendly messages for all HTTP status codes
+  - Session expiry vs login failure distinction
+- ✅ Mobile responsiveness fixes
+  - Hamburger menu navigation for mobile
+  - Form layouts stack on mobile
+  - Match cards responsive on all screen sizes
+- ✅ Form validation with inline errors
+  - Email validation on blur
+  - Password strength validation
+  - Confirm password matching
+  - Inline error messages with red borders
+- ✅ Optimistic updates in MatchCard (instant status changes)
+  - React Query optimistic updates
+  - Automatic rollback on error
+  - No more disappearing matches
+- ✅ Fixed match status progression (matched → interested → applied)
+  - Status treated as progression pipeline
+  - Both buttons show checked when applied
+- ✅ Comprehensive test suite created (138+ tests):
+  - Frontend: API client (21), MatchCard (20), LoginPage (10), RegisterPage (15) = 66 tests
+  - Backend: Match status (13), Preferences merging (16), CV upload (16), Allowlist (27) = 72 tests
+- ✅ AuthContext export fix for testing
+- ✅ Smart retry logic in React Query (don't retry client errors)
+
 **Match Filtering & UX:**
 - ✅ Match percentage filters are now exclusive (60-69%, 70-84%, 85%+) - no more duplicate jobs across filters
 - ✅ Remote/onsite is now a hard filter (not a weighted score) - jobs filtered before matching
@@ -451,8 +494,9 @@ yarn dev --debug
 **Pre-Deployment Features:**
 - [x] User-Submitted Jobs - Allow users to paste/add custom job postings ✅
 - [x] Employment Eligibility Filter - Geographic/visa restrictions ✅
-- [ ] UI Polish - Loading states, errors, mobile responsiveness
-- [ ] Fix Remaining Tests - Get to 100% test coverage (21 backend tests failing)
+- [x] UI Polish - Loading states, errors, mobile responsiveness ✅
+- [x] Email Allowlist Tests - Comprehensive test suite (27 tests) ✅
+- [ ] Fix Remaining Tests - Get to 100% test coverage (some backend/frontend tests need fixes)
 
 **Post-Deployment (Nice-to-Have):**
 - [ ] Auto-Refresh Matches - Trigger on CV/preferences update
@@ -578,7 +622,12 @@ ALLOWED_EMAILS=info@devdenise.com,friend@example.com
 - Use admin API to manage allowed emails dynamically
 - Config list serves as fallback if database is empty
 
+**Testing:**
+- ✅ Comprehensive test suite created (27 tests covering all allowlist functionality)
+- Tests cover: registration modes, admin API, integration workflows, edge cases
+- Location: `backend/tests/integration/test_allowlist.py`
+
 **TODO:**
 - Add proper role-based admin system (currently user id=1 is admin)
-- Add tests for allowlist behavior
 - Consider email invitation flow with tokens
+- Admin self-lockout prevention (warn before removing own email)

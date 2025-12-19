@@ -13,6 +13,9 @@ from app.models.scrape_log import ScrapeLog
 from app.models.user import User
 from app.utils.auth import get_password_hash
 
+# Disable rate limiting for all tests
+os.environ["RATE_LIMIT_ENABLED"] = "false"
+
 
 @pytest.fixture(scope="function")
 def db_session() -> Session:

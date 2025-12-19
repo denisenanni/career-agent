@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     registration_mode: str = "open"  # "open", "allowlist", "closed"
     allowed_emails: str = ""  # Comma-separated list of allowed emails (fallback if DB is empty)
 
+    # Rate limiting
+    rate_limit_enabled: bool = True  # Disable for testing
+
     @field_validator('registration_mode')
     @classmethod
     def validate_registration_mode(cls, v: str) -> str:
