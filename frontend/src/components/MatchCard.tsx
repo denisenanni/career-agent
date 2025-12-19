@@ -40,7 +40,41 @@ export const MatchCard = memo(function MatchCard({ match }: MatchCardProps) {
 
   const updateStatusMutation = useMutation({
     mutationFn: (status: string) => updateMatchStatus(match.id, status),
-    onSuccess: () => {
+    onMutate: async (newStatus) => {
+      // Cancel any outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: ['matches'] })
+
+      // Snapshot the previous value
+      const previousMatches = queryClient.getQueriesData({ queryKey: ['matches'] })
+
+      // Optimistically update all match queries
+      queryClient.setQueriesData<any>(
+        { queryKey: ['matches'] },
+        (old: any) => {
+          if (!old?.matches) return old
+
+          return {
+            ...old,
+            matches: old.matches.map((m: any) =>
+              m.id === match.id ? { ...m, status: newStatus } : m
+            ),
+          }
+        }
+      )
+
+      // Return context with previous data for rollback
+      return { previousMatches }
+    },
+    onError: (_err, _newStatus, context) => {
+      // Rollback to previous data on error
+      if (context?.previousMatches) {
+        context.previousMatches.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+    },
+    onSettled: () => {
+      // Refetch to ensure sync with server
       queryClient.invalidateQueries({ queryKey: ['matches'] })
     },
   })
