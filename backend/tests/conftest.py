@@ -43,7 +43,7 @@ def db_session() -> Session:
 
             # Drop all data - truncate only tables that exist
             with engine.begin() as conn:
-                conn.execute(text("TRUNCATE TABLE jobs, scrape_logs, users, matches RESTART IDENTITY CASCADE"))
+                conn.execute(text("TRUNCATE TABLE jobs, scrape_logs, users, matches, user_jobs RESTART IDENTITY CASCADE"))
     else:
         # Use in-memory SQLite for unit tests
         engine = create_engine(

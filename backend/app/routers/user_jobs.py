@@ -8,12 +8,16 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 import logging
 import json
+from datetime import datetime
+import uuid
 
 from app.database import get_db
 from app.models.user import User
 from app.models.user_job import UserJob
+from app.models.job import Job
 from app.dependencies.auth import get_current_user
 from app.services.llm import client as llm_client
+from app.services.matching import create_match_for_job
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -213,7 +217,7 @@ async def create_user_job(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Create a new user-submitted job posting.
+    Create a new user-submitted job posting and automatically create a match.
 
     - **title**: Job title (required)
     - **company**: Company name (optional)
@@ -222,7 +226,29 @@ async def create_user_job(
     - Additional fields: location, remote_type, job_type, salary, tags
 
     Returns the created job with generated ID.
+
+    Note: Also creates a corresponding Job entry for matching purposes.
     """
+    # Create the main Job entry (for matching system)
+    # Use UUID to ensure unique source_id
+    unique_id = str(uuid.uuid4())[:8]
+    job_entry = Job(
+        source="user_submitted",
+        source_id=f"user_{current_user.id}_{unique_id}",
+        url=job_data.url or "",
+        title=job_data.title,
+        company=job_data.company,
+        description=job_data.description,
+        salary_min=job_data.salary_min,
+        salary_max=job_data.salary_max,
+        salary_currency=job_data.salary_currency or "USD",
+        location=job_data.location,
+        remote_type=job_data.remote_type,
+        job_type=job_data.job_type,
+        tags=job_data.tags or [],
+        raw_data={"user_submitted": True, "user_id": current_user.id},
+    )
+
     # Create new user job
     new_job = UserJob(
         user_id=current_user.id,
@@ -240,10 +266,25 @@ async def create_user_job(
     )
 
     try:
+        # Add both to database
+        db.add(job_entry)
         db.add(new_job)
         db.commit()
         db.refresh(new_job)
+        db.refresh(job_entry)
         logger.info(f"User {current_user.id} created job {new_job.id}: {new_job.title}")
+
+        # Create match for this job (async, in background)
+        try:
+            match = await create_match_for_job(db, current_user, job_entry, min_score=0)
+            if match:
+                logger.info(f"Created match {match.id} for user job {new_job.id} with score {match.score}")
+            else:
+                logger.info(f"No match created for user job {new_job.id} (score below threshold or no CV)")
+        except Exception as e:
+            # Don't fail the whole request if matching fails
+            logger.error(f"Failed to create match for user job {new_job.id}: {e}")
+
     except IntegrityError:
         db.rollback()
         raise HTTPException(

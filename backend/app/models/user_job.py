@@ -1,10 +1,13 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, ForeignKey, UniqueConstraint
 from datetime import datetime
 from app.models import Base
 
 
 class UserJob(Base):
     __tablename__ = "user_jobs"
+    __table_args__ = (
+        UniqueConstraint('user_id', 'company', 'title', name='uq_user_jobs_user_company_title'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)

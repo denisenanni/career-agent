@@ -7,6 +7,7 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 // Code splitting: Lazy load pages to reduce initial bundle size
 const HomePage = lazy(() => import('./pages/HomePage').then(m => ({ default: m.HomePage })))
 const JobsPage = lazy(() => import('./pages/JobsPage').then(m => ({ default: m.JobsPage })))
+const MyJobsPage = lazy(() => import('./pages/MyJobsPage').then(m => ({ default: m.MyJobsPage })))
 const MatchesPage = lazy(() => import('./pages/MatchesPage').then(m => ({ default: m.MatchesPage })))
 const InsightsPage = lazy(() => import('./pages/InsightsPage').then(m => ({ default: m.InsightsPage })))
 const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })))
@@ -34,6 +35,7 @@ function App() {
             <Route path="/" element={<Layout />}>
               <Route index element={<HomePage />} />
               <Route path="jobs" element={<JobsPage />} />
+              <Route path="my-jobs" element={<ProtectedRoute><MyJobsPage /></ProtectedRoute>} />
               <Route path="matches" element={<ProtectedRoute><MatchesPage /></ProtectedRoute>} />
               <Route path="insights" element={<ProtectedRoute><InsightsPage /></ProtectedRoute>} />
               <Route path="profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
