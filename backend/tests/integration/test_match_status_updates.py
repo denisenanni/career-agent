@@ -20,7 +20,6 @@ def test_match(db_session, test_user, existing_job):
         analysis="Great match for your skills",
         reasoning={
             "skill_score": 90,
-            "work_type_score": 80,
             "location_score": 85,
             "salary_score": 80,
             "experience_score": 85,
@@ -28,10 +27,9 @@ def test_match(db_session, test_user, existing_job):
             "missing_skills": ["AWS"],
             "weights": {
                 "skills": 0.4,
-                "work_type": 0.15,
-                "location": 0.15,
-                "salary": 0.15,
-                "experience": 0.15,
+                "location": 0.1,
+                "salary": 0.1,
+                "experience": 0.2,
             },
         },
     )
