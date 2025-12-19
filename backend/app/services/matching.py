@@ -105,6 +105,51 @@ def should_match_remote_type(user_preferences: Dict[str, Any], job: Job) -> bool
     return job.remote_type in preferred_remote
 
 
+def should_match_eligibility(user_preferences: Dict[str, Any], job: Job) -> bool:
+    """
+    Hard filter: Check if job's employment eligibility matches user's location and visa needs.
+
+    Employment eligibility is treated as a hard filter because:
+    - User cannot apply to jobs they're not eligible for
+    - Legal restrictions on employment by region
+    - Visa sponsorship is a critical requirement
+
+    Returns:
+        True if job should be matched, False to skip this job entirely
+    """
+    user_regions = user_preferences.get("eligible_regions", [])
+    user_needs_visa = user_preferences.get("needs_visa_sponsorship", False)
+
+    # 1. Check regional eligibility
+    if user_regions:
+        job_regions = job.eligible_regions or ["Worldwide"]
+
+        # If job accepts worldwide, user is eligible
+        if "Worldwide" in job_regions:
+            pass  # Continue to visa check
+        # If user can work worldwide, they're eligible for any job
+        elif "Worldwide" in user_regions:
+            pass  # Continue to visa check
+        # Check if there's overlap between user regions and job regions
+        else:
+            user_regions_lower = [r.lower() for r in user_regions]
+            job_regions_lower = [r.lower() for r in job_regions]
+            if not any(ur in job_regions_lower for ur in user_regions_lower):
+                logger.info(f"Job {job.id} regions {job_regions} don't match user regions {user_regions}")
+                return False
+
+    # 2. Check visa sponsorship requirement
+    if user_needs_visa:
+        # NULL means not specified - assume it might be available, so allow match
+        # 0 means explicitly no sponsorship - skip this job
+        # 1 means yes - allow match
+        if job.visa_sponsorship == 0:
+            logger.info(f"Job {job.id} doesn't offer visa sponsorship but user needs it")
+            return False
+
+    return True
+
+
 def calculate_location_match(user_preferences: Dict[str, Any], job: Job) -> float:
     """
     Calculate match score for location/country preference only.
@@ -380,10 +425,17 @@ async def create_match_for_job(
         Match object if score >= min_score, None otherwise
     """
     try:
-        # Hard filter: Check remote type preference first (before expensive LLM call)
+        # Hard filters: Check preferences first (before expensive LLM call)
         user_prefs = user.preferences or {}
+
+        # Filter by remote type
         if not should_match_remote_type(user_prefs, job):
             logger.info(f"Job {job.id} remote_type '{job.remote_type}' doesn't match user {user.id} preferences")
+            return None
+
+        # Filter by employment eligibility
+        if not should_match_eligibility(user_prefs, job):
+            logger.info(f"Job {job.id} doesn't match user {user.id} eligibility requirements")
             return None
 
         # Extract job requirements using LLM
@@ -396,6 +448,20 @@ async def create_match_for_job(
         if not job_requirements:
             logger.warning(f"Failed to extract requirements for job {job.id}")
             return None
+
+        # Save eligibility data to Job table if extracted and not already set
+        if job.eligible_regions is None and job_requirements.get("eligible_regions"):
+            job.eligible_regions = job_requirements["eligible_regions"]
+            db.add(job)
+            db.flush()  # Update job without committing yet
+
+        if job.visa_sponsorship is None and job_requirements.get("visa_sponsorship") is not None:
+            # Convert boolean to int (0/1) or keep None
+            visa_value = job_requirements["visa_sponsorship"]
+            if isinstance(visa_value, bool):
+                job.visa_sponsorship = 1 if visa_value else 0
+            db.add(job)
+            db.flush()  # Update job without committing yet
 
         # Calculate match score
         score, analysis = calculate_match_score(user, job, job_requirements)

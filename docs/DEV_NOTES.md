@@ -445,7 +445,7 @@ yarn dev --debug
 ## Pending Features Checklist
 
 **Pre-Deployment Features:**
-- [ ] User-Submitted Jobs - Allow users to paste/add custom job postings
+- [x] User-Submitted Jobs - Allow users to paste/add custom job postings ✅
 - [ ] Employment Eligibility Filter - Geographic/visa restrictions
 - [ ] UI Polish - Loading states, errors, mobile responsiveness
 - [ ] Fix Remaining Tests - Get to 100% test coverage (21 backend tests failing)

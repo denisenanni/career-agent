@@ -14,6 +14,8 @@ export function PreferencesForm() {
   const [jobTypes, setJobTypes] = useState<string[]>([])
   const [remoteTypes, setRemoteTypes] = useState<string[]>([])
   const [preferredCountries, setPreferredCountries] = useState<string[]>([])
+  const [eligibleRegions, setEligibleRegions] = useState<string[]>([])
+  const [needsVisaSponsorship, setNeedsVisaSponsorship] = useState(false)
 
   // Load current preferences
   useEffect(() => {
@@ -22,6 +24,8 @@ export function PreferencesForm() {
       setJobTypes(user.preferences.job_types || [])
       setRemoteTypes(user.preferences.remote_types || [])
       setPreferredCountries(user.preferences.preferred_countries || [])
+      setEligibleRegions(user.preferences.eligible_regions || [])
+      setNeedsVisaSponsorship(user.preferences.needs_visa_sponsorship || false)
     }
   }, [user])
 
@@ -44,6 +48,12 @@ export function PreferencesForm() {
     )
   }
 
+  const toggleEligibleRegion = (region: string) => {
+    setEligibleRegions(prev =>
+      prev.includes(region) ? prev.filter(r => r !== region) : [...prev, region]
+    )
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -58,6 +68,8 @@ export function PreferencesForm() {
       if (jobTypes.length > 0) preferences.job_types = jobTypes
       if (remoteTypes.length > 0) preferences.remote_types = remoteTypes
       if (preferredCountries.length > 0) preferences.preferred_countries = preferredCountries
+      if (eligibleRegions.length > 0) preferences.eligible_regions = eligibleRegions
+      preferences.needs_visa_sponsorship = needsVisaSponsorship
 
       await updateProfile({ preferences })
       await refreshUser()
@@ -175,6 +187,56 @@ export function PreferencesForm() {
           {preferredCountries.length === 0 && (
             <p className="text-xs text-gray-500 mt-1">No selection = open to all locations</p>
           )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Employment Eligibility <span className="text-gray-500 text-xs">(regions where you can work)</span>
+          </label>
+          <div className="space-y-2">
+            {[
+              { value: 'Worldwide', label: 'Worldwide (no restrictions)' },
+              { value: 'US', label: 'United States' },
+              { value: 'EU', label: 'European Union' },
+              { value: 'UK', label: 'United Kingdom' },
+              { value: 'Canada', label: 'Canada' },
+              { value: 'Australia', label: 'Australia' },
+              { value: 'Asia', label: 'Asia' }
+            ].map(({ value, label }) => (
+              <label key={value} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={eligibleRegions.includes(value)}
+                  onChange={() => toggleEligibleRegion(value)}
+                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                />
+                <span className="text-sm text-gray-700">{label}</span>
+              </label>
+            ))}
+          </div>
+          {eligibleRegions.length === 0 && (
+            <p className="text-xs text-gray-500 mt-1">No selection = all regions</p>
+          )}
+          <p className="text-xs text-gray-500 mt-2">
+            Jobs restricted to regions you haven't selected will be filtered out
+          </p>
+        </div>
+
+        <div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={needsVisaSponsorship}
+              onChange={(e) => setNeedsVisaSponsorship(e.target.checked)}
+              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+            />
+            <span className="text-sm font-medium text-gray-700">
+              I need visa sponsorship
+            </span>
+          </label>
+          <p className="text-xs text-gray-500 mt-1 ml-6">
+            Jobs that explicitly don't offer visa sponsorship will be filtered out
+          </p>
         </div>
 
         {error && (

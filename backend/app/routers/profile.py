@@ -49,22 +49,31 @@ async def update_profile(
     - **experience_years**: Years of professional experience (0-70)
     - **preferences**: Job preferences as JSON object
     """
+    # Query user from database to ensure it's attached to the session
+    user = db.query(User).filter(User.id == current_user.id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
     # Update fields that were provided
     update_data = profile_data.model_dump(exclude_unset=True)
 
     for field, value in update_data.items():
-        setattr(current_user, field, value)
+        setattr(user, field, value)
 
     # Update timestamp
-    current_user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.utcnow()
 
     db.commit()
-    db.refresh(current_user)
+    db.refresh(user)
 
     # Invalidate user cache to ensure fresh data on next request
-    invalidate_user_cache(current_user.id)
+    invalidate_user_cache(user.id)
 
-    return current_user
+    return user
 
 
 @router.post("/cv", response_model=CVUploadResponse)
@@ -91,6 +100,15 @@ async def upload_cv(
     file_content = await file.read()
     file_size = len(file_content)
 
+    # Query user from database to ensure it's attached to the session
+    user = db.query(User).filter(User.id == current_user.id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
     try:
         # Validate file
         validate_cv_file(file.filename, file_size, max_size_mb=5)
@@ -108,51 +126,51 @@ async def upload_cv(
         parsed_data = parse_cv_with_llm(cv_text)
 
         # Update user profile with CV data
-        current_user.cv_text = cv_text
-        current_user.cv_filename = file.filename
-        current_user.cv_uploaded_at = datetime.now(timezone.utc)
-        current_user.updated_at = datetime.utcnow()
+        user.cv_text = cv_text
+        user.cv_filename = file.filename
+        user.cv_uploaded_at = datetime.now(timezone.utc)
+        user.updated_at = datetime.utcnow()
 
         # If LLM parsing succeeded, update profile with parsed data
         if parsed_data:
-            logger.info(f"Successfully parsed CV for user {current_user.id}: {parsed_data.get('name')}")
+            logger.info(f"Successfully parsed CV for user {user.id}: {parsed_data.get('name')}")
 
             # Update name if provided and not already set
-            if parsed_data.get('name') and not current_user.full_name:
-                current_user.full_name = parsed_data['name']
+            if parsed_data.get('name') and not user.full_name:
+                user.full_name = parsed_data['name']
 
             # Update skills if provided
             if parsed_data.get('skills'):
                 # Merge with existing skills if any
-                existing_skills = current_user.skills or []
+                existing_skills = user.skills or []
                 new_skills = parsed_data['skills']
                 # Combine and deduplicate
-                current_user.skills = list(set(existing_skills + new_skills))
+                user.skills = list(set(existing_skills + new_skills))
 
             # Update experience years if provided and not already set
-            if parsed_data.get('years_of_experience') and not current_user.experience_years:
-                current_user.experience_years = parsed_data['years_of_experience']
+            if parsed_data.get('years_of_experience') and not user.experience_years:
+                user.experience_years = parsed_data['years_of_experience']
 
             # Store full parsed data in preferences for now (we can use it later)
             # Important: Create a new dict to trigger SQLAlchemy's change detection
-            preferences = current_user.preferences.copy() if current_user.preferences else {}
+            preferences = user.preferences.copy() if user.preferences else {}
             preferences['parsed_cv'] = parsed_data
-            current_user.preferences = preferences
+            user.preferences = preferences
         else:
-            logger.warning(f"LLM parsing failed for user {current_user.id}, CV text still saved")
+            logger.warning(f"LLM parsing failed for user {user.id}, CV text still saved")
 
         db.commit()
-        db.refresh(current_user)
+        db.refresh(user)
 
         # Invalidate user cache to ensure fresh data on next request
-        invalidate_user_cache(current_user.id)
+        invalidate_user_cache(user.id)
 
         return CVUploadResponse(
             filename=file.filename,
             file_size=file_size,
             content_type=file.content_type or "application/octet-stream",
             cv_text_length=len(cv_text),
-            uploaded_at=current_user.cv_uploaded_at,
+            uploaded_at=user.cv_uploaded_at,
             message=f"CV uploaded successfully. Extracted {len(cv_text)} characters of text." +
                     (f" Parsed with Claude Haiku: {parsed_data.get('name', 'Unknown')}" if parsed_data else " (LLM parsing unavailable)")
         )

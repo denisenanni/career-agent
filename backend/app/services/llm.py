@@ -155,6 +155,8 @@ def extract_job_requirements(job_title: str, job_company: str, job_description: 
     - languages: Required languages
     - job_type: Type of job (permanent, contract, etc.)
     - remote_type: Remote work policy (full, hybrid, onsite)
+    - eligible_regions: List of eligible regions (["US", "EU", "Worldwide"], etc.)
+    - visa_sponsorship: Visa sponsorship availability (true, false, or null)
     """
     if not client:
         logger.warning("Anthropic API key not configured, skipping LLM extraction")
@@ -184,8 +186,14 @@ def extract_job_requirements(job_title: str, job_company: str, job_description: 
   "education": "string or null",
   "languages": ["English", ...],
   "job_type": "permanent" | "contract" | "freelance" | "part-time",
-  "remote_type": "full" | "hybrid" | "onsite"
+  "remote_type": "full" | "hybrid" | "onsite",
+  "eligible_regions": ["US", "EU", "UK", "Canada", "Worldwide", ...] or ["Worldwide"],
+  "visa_sponsorship": true | false | null
 }}
+
+Notes on eligibility extraction:
+- eligible_regions: Extract geographic restrictions (e.g., "US citizens only" → ["US"], "EU work authorization" → ["EU"], "Remote worldwide" → ["Worldwide"])
+- visa_sponsorship: true if explicitly mentioned as available, false if explicitly not offered, null if not mentioned
 
 Job Posting:
 ---

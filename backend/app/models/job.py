@@ -50,6 +50,10 @@ class Job(Base):
     # Tags/skills
     tags = Column(JSON, default=list)
 
+    # Employment eligibility
+    eligible_regions = Column(JSON, default=lambda: ["Worldwide"])  # ["US", "EU", "Worldwide", etc.]
+    visa_sponsorship = Column(Integer, nullable=True)  # NULL = not specified, 0 = no, 1 = yes
+
     # Timestamps
     posted_at = Column(DateTime, nullable=True)
     scraped_at = Column(DateTime, default=datetime.utcnow, nullable=False)
