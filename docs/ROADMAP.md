@@ -570,7 +570,7 @@ Return only the JSON array.
 
 ### Phase 7.1: Pre production checks and final adjustments
 **Tasks:**
-1. CHeck JWT implementation
+1. ✅ Check JWT implementation - COMPLETED with security hardening
 2. editable profile/skills. How to allow the user to edit the informations obtianed from parsing? :done
 3. Search in jobs doesn't work? with search parameters i get 500 (example http://localhost:8000/api/jobs?search=lead&limit=50): solved
 4. Add some more matching parameters (like job title) because i get matches for Director People Ops for example, and i'm a software developer: :done
@@ -703,6 +703,89 @@ Return only the JSON array.
 - Foundation for test-driven development in future features
 - Automated regression detection
 
+---
+
+### Phase 7.3: Security Hardening & UX Improvements (COMPLETED)
+
+**Goal:** Enhance security, improve match filtering UX, and prepare for production deployment.
+
+**Security Improvements:**
+
+1. ✅ JWT_SECRET validation and hardening
+   - Added `@field_validator` for JWT_SECRET in config.py
+   - Blocks default secret in production (raises ValueError)
+   - Enforces minimum 32-character length
+   - Warns in development if using default
+   - Generated strong secret: 44 characters (base64)
+
+2. ✅ Rate limiting on authentication endpoints
+   - Register: 5 attempts per hour per IP
+   - Login: 10 attempts per minute per IP
+   - Prevents brute force attacks
+
+3. ✅ Timing attack prevention in login
+   - Constant-time password verification
+   - Uses dummy hash when user doesn't exist
+   - Prevents email enumeration attacks
+
+4. ✅ CORS hardening
+   - Configurable origins from settings (supports production)
+   - Restricted HTTP methods (GET, POST, PUT, DELETE, OPTIONS)
+   - Restricted headers (Content-Type, Authorization)
+
+**Code Quality Improvements:**
+
+5. ✅ Redoc improvements
+   - Pinned CDN version to v2.1.3 (reproducible builds)
+   - Extracted HTML template to constant
+   - Added return type hint (`-> HTMLResponse`)
+
+6. ✅ Input validation improvements
+   - Skills endpoint: regex validation for skill names
+   - Better error handling with HTTPException
+
+**Match Filtering & UX:**
+
+7. ✅ Exclusive match score filters
+   - Changed from overlapping (60%+, 70%+, 85%+) to exclusive ranges
+   - Fair Matches: 60-69% only
+   - Good Matches: 70-84% only
+   - Excellent Matches: 85%+ only
+   - Added `max_score` parameter to backend API
+   - Updated frontend with new filter options
+
+8. ✅ Remote type as hard filter
+   - Changed from weighted score (10%) to hard filter
+   - Jobs filtered BEFORE expensive LLM calls (cost savings)
+   - Created `should_match_remote_type()` function
+   - Updated `calculate_location_match()` to only score country preference
+   - No matches created for jobs that don't match remote preference
+
+**Files Modified:**
+- `backend/app/config.py` - JWT validation
+- `backend/app/main.py` - CORS + Redoc
+- `backend/app/routers/auth.py` - Rate limiting + timing attack prevention
+- `backend/app/routers/skills.py` - Input validation
+- `backend/app/routers/matches.py` - max_score parameter
+- `backend/app/services/matching.py` - Remote hard filter
+- `frontend/src/types/index.ts` - MatchFilters interface
+- `frontend/src/pages/MatchesPage.tsx` - Exclusive ranges
+- `frontend/src/components/__tests__/ProtectedRoute.test.tsx` - Fixed unused import
+- `docs/DEV_NOTES.md` - Documentation
+
+**Future Features Documented:**
+- Employment eligibility filter (detect "US only", visa sponsorship)
+- Auto-refresh matches on profile/CV changes
+
+**Deliverables:**
+- [x] Security hardening complete
+- [x] Match filtering improved
+- [x] Code quality enhanced
+- [x] Tests passing (156/181)
+- [x] Frontend builds successfully
+- [x] Documentation updated
+
+---
 
 ## Related Documentation
 
