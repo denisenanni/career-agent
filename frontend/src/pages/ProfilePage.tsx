@@ -8,12 +8,15 @@ import type { CVUploadResponse } from '../types'
 export function ProfilePage() {
   const { user, refreshUser } = useAuth()
   const [showParsedCV, setShowParsedCV] = useState(false)
+  const [parsedCVRefreshTrigger, setParsedCVRefreshTrigger] = useState(0)
 
   const handleUploadSuccess = async (_response: CVUploadResponse) => {
     // Refresh user to get updated profile
     await refreshUser()
     // Show parsed CV display
     setShowParsedCV(true)
+    // Trigger ParsedCVDisplay to reload
+    setParsedCVRefreshTrigger(prev => prev + 1)
   }
 
   return (
@@ -81,7 +84,7 @@ export function ProfilePage() {
 
       {/* Parsed CV Display */}
       {(showParsedCV || user?.cv_filename) && (
-        <ParsedCVDisplay />
+        <ParsedCVDisplay refreshTrigger={parsedCVRefreshTrigger} />
       )}
     </div>
   )

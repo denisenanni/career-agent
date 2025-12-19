@@ -5,7 +5,11 @@ import { useAuth } from '../contexts/AuthContext'
 import { SkillAutocompleteModal } from './SkillAutocompleteModal'
 import type { ParsedCV } from '../types'
 
-export function ParsedCVDisplay() {
+interface ParsedCVDisplayProps {
+  refreshTrigger?: number
+}
+
+export function ParsedCVDisplay({ refreshTrigger }: ParsedCVDisplayProps = {}) {
   const { refreshUser } = useAuth()
   const [parsedCV, setParsedCV] = useState<ParsedCV | null>(null)
   const [editedCV, setEditedCV] = useState<ParsedCV | null>(null)
@@ -17,9 +21,11 @@ export function ParsedCVDisplay() {
 
   useEffect(() => {
     loadParsedCV()
-  }, [])
+  }, [refreshTrigger])
 
   async function loadParsedCV() {
+    setLoading(true)
+    setError(null)
     try {
       const data = await getParsedCV()
       setParsedCV(data)
