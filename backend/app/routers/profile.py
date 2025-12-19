@@ -62,7 +62,14 @@ async def update_profile(
     update_data = profile_data.model_dump(exclude_unset=True)
 
     for field, value in update_data.items():
-        setattr(user, field, value)
+        # Special handling for preferences: merge instead of overwrite
+        if field == 'preferences' and value is not None:
+            # Preserve existing preferences and merge with new ones
+            existing_prefs = user.preferences or {}
+            merged_prefs = {**existing_prefs, **value}
+            setattr(user, field, merged_prefs)
+        else:
+            setattr(user, field, value)
 
     # Update timestamp
     user.updated_at = datetime.utcnow()
