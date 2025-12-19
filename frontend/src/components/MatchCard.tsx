@@ -237,14 +237,14 @@ export const MatchCard = memo(function MatchCard({ match }: MatchCardProps) {
       <div className="flex gap-2 mt-3 pt-3 border-t border-gray-200">
         <button
           onClick={() => updateStatusMutation.mutate('interested')}
-          disabled={updateStatusMutation.isPending || match.status === 'interested'}
+          disabled={updateStatusMutation.isPending || match.status === 'interested' || match.status === 'applied'}
           className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
-            match.status === 'interested'
+            match.status === 'interested' || match.status === 'applied'
               ? 'bg-blue-100 text-blue-700 cursor-default'
               : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
           }`}
         >
-          {match.status === 'interested' ? '✓ Interested' : 'Mark Interested'}
+          {match.status === 'interested' || match.status === 'applied' ? '✓ Interested' : 'Mark Interested'}
         </button>
         <button
           onClick={() => updateStatusMutation.mutate('applied')}
