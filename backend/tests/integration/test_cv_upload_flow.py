@@ -48,7 +48,8 @@ class TestCVUploadFlow:
         # Create a fake PDF file
         pdf_content = b"%PDF-1.4\n%Test CV content"
 
-        with patch('app.utils.cv_parser.extract_cv_text', return_value=sample_cv_text):
+        # Patch at the point of use in the router, not where it's defined
+        with patch('app.routers.profile.extract_cv_text', return_value=sample_cv_text):
             response = authenticated_client.post(
                 "/api/profile/cv",
                 files={"file": ("resume.pdf", io.BytesIO(pdf_content), "application/pdf")}

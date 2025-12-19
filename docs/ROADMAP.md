@@ -787,6 +787,69 @@ Return only the JSON array.
 
 ---
 
+### Phase 8: Post-Production Features (Future)
+
+**Pre-Deployment Remaining:**
+- [ ] Fix Remaining Tests - 26 failing, 63 errors (test isolation and fixture issues)
+  - Status: Improved from 35 failing to 26 failing ✅
+  - Backend: 91 passing, 26 failing, 63 errors
+  - Frontend: Tests passing, build working
+- [ ] Production Deployment
+  - Run `terraform apply` for Railway + Vercel
+  - Verify deployments working
+  - Test end-to-end in production
+- [ ] CI/CD Pipeline
+  - GitHub Actions for automated testing
+  - Deploy on merge to main
+- [ ] Scheduled Scraping
+  - Railway cron job for daily job scraping
+  - Monitor scraping success/failure
+- [ ] Portfolio Write-up
+  - Case study documentation
+  - Screenshots and technical highlights
+
+**Post-Deployment Features (Nice-to-Have):**
+- [ ] Auto-Refresh Matches on Profile Changes
+  - Trigger background job after CV upload
+  - Trigger background job after preferences update
+  - Show notification: "Your matches are being refreshed..."
+  - Priority: Low (deferred)
+
+- [ ] Email Notifications
+  - New matches notification
+  - Application deadline reminders
+  - Weekly digest of new jobs
+  - Priority: Medium
+
+- [ ] Streaming Response for Cover Letters
+  - Stream Claude API responses for better UX
+  - Real-time generation display
+  - Would require SSE or WebSockets
+  - Priority: Low (deferred until user feedback)
+
+**Future Enhancements:**
+- [ ] Additional Job Board Scrapers
+  - WeWorkRemotely (Medium difficulty)
+  - LinkedIn (High difficulty - save for later)
+  - AngelList (Medium difficulty)
+
+- [ ] Advanced Filtering
+  - Filter by company size
+  - Filter by funding stage (for startups)
+  - Filter by tech stack beyond skills
+
+- [ ] Analytics Dashboard
+  - Application success rate
+  - Skills in demand (market trends)
+  - Salary trends by role/location
+
+- [ ] Team/Multi-user Features
+  - Recruiter dashboard
+  - Team collaboration on applications
+  - Shared job collections
+
+---
+
 ## Related Documentation
 
 For technical details, infrastructure, and development guidelines, see:
@@ -794,4 +857,4 @@ For technical details, infrastructure, and development guidelines, see:
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Infrastructure, deployment, cost estimates, API keys
 - **[FILE_STRUCTURE.md](./FILE_STRUCTURE.md)** - Complete directory structure and organization
 - **[README.md](../README.md)** - Quick start, development workflow, common commands
-- **[DEV_NOTES.md](./DEV_NOTES.md)** - Development notes, future features, conventions, debugging tips
+- **[DEV_NOTES.md](./DEV_NOTES.md)** - Development workflow, conventions, debugging guides, technical decisions

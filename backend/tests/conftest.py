@@ -20,22 +20,29 @@ os.environ["RATE_LIMIT_ENABLED"] = "false"
 @pytest.fixture(scope="function")
 def db_session() -> Session:
     """
-    Create a fresh test database for each test.
+    Create a fresh test database for each test with transaction-based isolation.
     Uses the TEST_DATABASE_URL environment variable if set, otherwise uses in-memory SQLite.
+
+    Each test runs in a transaction that is rolled back after the test completes,
+    ensuring complete isolation between tests.
 
     Note: Integration tests require PostgreSQL. Set TEST_DATABASE_URL to use real database.
     """
     test_db_url = os.getenv("TEST_DATABASE_URL")
 
     if test_db_url:
-        # Use real PostgreSQL for integration tests
+        # Use real PostgreSQL for integration tests with transaction-based isolation
         engine = create_engine(test_db_url)
 
-        # Create all tables
+        # Create all tables (only once per test session)
         Base.metadata.create_all(bind=engine)
 
-        # Create session
-        TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        # Create a connection and begin a transaction
+        connection = engine.connect()
+        transaction = connection.begin()
+
+        # Create session bound to this connection
+        TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=connection)
         session = TestingSessionLocal()
 
         try:
@@ -44,9 +51,11 @@ def db_session() -> Session:
             # Close session
             session.close()
 
-            # Drop all data - truncate only tables that exist
-            with engine.begin() as conn:
-                conn.execute(text("TRUNCATE TABLE jobs, scrape_logs, users, matches, user_jobs RESTART IDENTITY CASCADE"))
+            # Rollback the transaction - this undoes ALL changes made during the test
+            transaction.rollback()
+
+            # Close connection
+            connection.close()
     else:
         # Use in-memory SQLite for unit tests
         engine = create_engine(
@@ -58,14 +67,20 @@ def db_session() -> Session:
         # Create all tables
         Base.metadata.create_all(bind=engine)
 
-        # Create session
-        TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        # For SQLite, use similar transaction-based approach
+        connection = engine.connect()
+        transaction = connection.begin()
+
+        TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=connection)
         session = TestingSessionLocal()
 
         try:
             yield session
         finally:
             session.close()
+            transaction.rollback()
+            connection.close()
+            # Clean up for SQLite
             Base.metadata.drop_all(bind=engine)
 
 

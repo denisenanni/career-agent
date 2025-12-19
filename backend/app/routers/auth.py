@@ -16,7 +16,7 @@ from app.dependencies.auth import get_current_user
 from app.config import settings
 
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=get_remote_address, enabled=settings.rate_limit_enabled)
 
 
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)

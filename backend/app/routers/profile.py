@@ -13,12 +13,13 @@ from app.dependencies.auth import get_current_user, invalidate_user_cache
 from app.schemas.profile import ProfileUpdate, CVUploadResponse, ProfileResponse, ParsedCVUpdate
 from app.utils.cv_parser import extract_cv_text, validate_cv_file
 from app.services.llm import parse_cv_with_llm
+from app.config import settings
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=get_remote_address, enabled=settings.rate_limit_enabled)
 
 
 @router.get("", response_model=ProfileResponse)

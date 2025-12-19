@@ -45,7 +45,7 @@ class ProfileResponse(BaseModel):
     bio: Optional[str]
     skills: List[str]
     experience_years: Optional[int]
-    preferences: dict
+    preferences: Optional[dict] = None
     cv_filename: Optional[str]
     cv_uploaded_at: Optional[datetime]
     created_at: datetime
