@@ -102,6 +102,7 @@ Extract these fields:
 - title: Job title (required)
 - company: Company name or null
 - description: Clean job description text
+- url: Job posting URL if present in the text, or null
 - location: Location string or null
 - remote_type: "full", "hybrid", "onsite", or null
 - job_type: "permanent", "contract", "part-time", or null
@@ -162,6 +163,7 @@ Return JSON only:"""
             "title": parsed["title"],
             "company": parsed.get("company"),
             "description": parsed.get("description", job_text),
+            "url": parsed.get("url"),
             "location": parsed.get("location"),
             "remote_type": parsed.get("remote_type"),
             "job_type": parsed.get("job_type"),
