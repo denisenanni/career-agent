@@ -26,6 +26,19 @@ class Settings(BaseSettings):
     # CORS - comma-separated list of allowed origins
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
+    # Registration control
+    registration_mode: str = "open"  # "open", "allowlist", "closed"
+    allowed_emails: str = ""  # Comma-separated list of allowed emails (fallback if DB is empty)
+
+    @field_validator('registration_mode')
+    @classmethod
+    def validate_registration_mode(cls, v: str) -> str:
+        """Validate registration_mode is one of allowed values"""
+        allowed_modes = ["open", "allowlist", "closed"]
+        if v not in allowed_modes:
+            raise ValueError(f"registration_mode must be one of: {', '.join(allowed_modes)}")
+        return v
+
     @field_validator('jwt_secret')
     @classmethod
     def validate_jwt_secret(cls, v: str, info) -> str:

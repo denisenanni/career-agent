@@ -9,9 +9,11 @@ from slowapi.util import get_remote_address
 
 from app.database import get_db
 from app.models.user import User
+from app.models.allowed_email import AllowedEmail
 from app.schemas.auth import UserRegister, UserLogin, Token, UserResponse
 from app.utils.auth import verify_password, get_password_hash, create_access_token
 from app.dependencies.auth import get_current_user
+from app.config import settings
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -32,7 +34,35 @@ async def register(
     - **full_name**: Optional full name
 
     Returns a JWT token that can be used immediately (auto-login).
+
+    Note: Registration may be restricted based on REGISTRATION_MODE setting.
     """
+    # Check registration mode
+    if settings.registration_mode == "closed":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Registration is currently closed"
+        )
+
+    if settings.registration_mode == "allowlist":
+        # Check database allowlist first
+        allowed = db.query(AllowedEmail).filter(
+            AllowedEmail.email == user_data.email.lower()
+        ).first()
+
+        # If not in database, check config fallback
+        if not allowed:
+            config_allowed_emails = [
+                email.strip().lower()
+                for email in settings.allowed_emails.split(",")
+                if email.strip()
+            ]
+            if user_data.email.lower() not in config_allowed_emails:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Registration is currently invite-only. Your email is not on the allowlist."
+                )
+
     # Check if user already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:

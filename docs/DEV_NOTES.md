@@ -498,3 +498,23 @@ Extracted: {
 - Show notification: "Your matches are being refreshed..."
 
 **Priority:** Low (nice-to-have, deferred for now)
+
+
+
+Task: Add email allowlist for registration
+Goal: Restrict registration to approved emails only
+
+Changes:
+- backend/app/config.py - Add settings:
+  registration_mode: str = "allowlist"  # "open", "allowlist", "closed"
+  allowed_emails: list[str] = ["info@devdenise.com"]
+- backend/app/routers/auth.py - Add check in register endpoint:
+  If registration_mode == "closed": return 403 "Registration is closed"
+  If registration_mode == "allowlist": check email against allowed_emails (case-insensitive), return 403 "Email not on allowlist" if not found
+  If registration_mode == "open": allow all
+- frontend/src/pages/RegisterPage.tsx - Handle 403 error
+  Show friendly message: "Registration is currently invite-only"
+- Add test for allowlist behavior
+  Environment override:
+  ALLOWED_EMAILS should accept comma-separated list: "email1@x.com,email2@y.com"
+- Also add POST /admin/allowlist and DELETE /admin/allowlist/{email} endpoints (admin-only) that store allowed emails in a new allowed_emails table, with the config list as fallback.
