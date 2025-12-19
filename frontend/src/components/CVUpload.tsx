@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react'
 import { uploadCV } from '../api/profile'
+import { LoadingSpinner } from './LoadingSpinner'
 import type { CVUploadResponse } from '../types'
 
 interface CVUploadProps {
@@ -59,10 +60,7 @@ export function CVUpload({ onUploadSuccess }: CVUploadProps) {
         className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-indigo-400 transition-colors"
       >
         {uploading ? (
-          <>
-            <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-gray-600">Uploading and parsing CV...</p>
-          </>
+          <LoadingSpinner size="lg" text="Uploading and parsing CV..." />
         ) : success ? (
           <>
             <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />

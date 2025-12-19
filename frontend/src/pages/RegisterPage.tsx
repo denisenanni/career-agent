@@ -13,20 +13,67 @@ export function RegisterPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
+  // Validation errors
+  const [emailError, setEmailError] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+  const [confirmPasswordError, setConfirmPasswordError] = useState('')
+
   // Get the page user tried to access, or default to /profile
   const from = (location.state as any)?.from?.pathname || '/profile'
+
+  // Validate email
+  const validateEmail = (value: string) => {
+    if (!value) {
+      setEmailError('Email is required')
+      return false
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(value)) {
+      setEmailError('Please enter a valid email address')
+      return false
+    }
+    setEmailError('')
+    return true
+  }
+
+  // Validate password
+  const validatePassword = (value: string) => {
+    if (!value) {
+      setPasswordError('Password is required')
+      return false
+    }
+    if (value.length < 8) {
+      setPasswordError('Password must be at least 8 characters')
+      return false
+    }
+    setPasswordError('')
+    return true
+  }
+
+  // Validate password confirmation
+  const validateConfirmPassword = (value: string) => {
+    if (!value) {
+      setConfirmPasswordError('Please confirm your password')
+      return false
+    }
+    if (value !== password) {
+      setConfirmPasswordError('Passwords do not match')
+      return false
+    }
+    setConfirmPasswordError('')
+    return true
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match')
-      return
-    }
+    // Validate all fields
+    const isEmailValid = validateEmail(email)
+    const isPasswordValid = validatePassword(password)
+    const isConfirmPasswordValid = validateConfirmPassword(confirmPassword)
 
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters')
+    if (!isEmailValid || !isPasswordValid || !isConfirmPasswordValid) {
       return
     }
 
@@ -68,9 +115,9 @@ export function RegisterPage() {
             </div>
           )}
 
-          <div className="rounded-md shadow-sm space-y-3">
+          <div className="rounded-md shadow-sm space-y-4">
             <div>
-              <label htmlFor="email" className="sr-only">
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                 Email address
               </label>
               <input
@@ -80,13 +127,22 @@ export function RegisterPage() {
                 autoComplete="email"
                 required
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Email address"
+                onChange={(e) => {
+                  setEmail(e.target.value)
+                  if (emailError) validateEmail(e.target.value)
+                }}
+                onBlur={(e) => validateEmail(e.target.value)}
+                className={`appearance-none relative block w-full px-3 py-2 border ${
+                  emailError ? 'border-red-300' : 'border-gray-300'
+                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                placeholder="you@example.com"
               />
+              {emailError && (
+                <p className="mt-1 text-sm text-red-600">{emailError}</p>
+              )}
             </div>
             <div>
-              <label htmlFor="password" className="sr-only">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
                 Password
               </label>
               <input
@@ -96,13 +152,24 @@ export function RegisterPage() {
                 autoComplete="new-password"
                 required
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Password (min 8 characters)"
+                onChange={(e) => {
+                  setPassword(e.target.value)
+                  if (passwordError) validatePassword(e.target.value)
+                  // Re-validate confirm password if it has a value
+                  if (confirmPassword) validateConfirmPassword(confirmPassword)
+                }}
+                onBlur={(e) => validatePassword(e.target.value)}
+                className={`appearance-none relative block w-full px-3 py-2 border ${
+                  passwordError ? 'border-red-300' : 'border-gray-300'
+                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                placeholder="At least 8 characters"
               />
+              {passwordError && (
+                <p className="mt-1 text-sm text-red-600">{passwordError}</p>
+              )}
             </div>
             <div>
-              <label htmlFor="confirm-password" className="sr-only">
+              <label htmlFor="confirm-password" className="block text-sm font-medium text-gray-700 mb-1">
                 Confirm Password
               </label>
               <input
@@ -112,10 +179,19 @@ export function RegisterPage() {
                 autoComplete="new-password"
                 required
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Confirm password"
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value)
+                  if (confirmPasswordError) validateConfirmPassword(e.target.value)
+                }}
+                onBlur={(e) => validateConfirmPassword(e.target.value)}
+                className={`appearance-none relative block w-full px-3 py-2 border ${
+                  confirmPasswordError ? 'border-red-300' : 'border-gray-300'
+                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                placeholder="Re-enter your password"
               />
+              {confirmPasswordError && (
+                <p className="mt-1 text-sm text-red-600">{confirmPasswordError}</p>
+              )}
             </div>
           </div>
 

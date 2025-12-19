@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { MatchCard } from '../components/MatchCard'
+import { SkeletonList } from '../components/SkeletonCard'
 import { fetchMatches, refreshMatches } from '../api/matches'
 import type { MatchFilters } from '../types'
 
@@ -97,7 +98,7 @@ export function MatchesPage() {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
         <div className="flex flex-wrap gap-4 items-end">
           {/* Score Range Filter */}
-          <div className="flex-1 min-w-[200px]">
+          <div className="flex-1 min-w-0 sm:min-w-[200px]">
             <label htmlFor="scoreRange" className="block text-sm font-medium text-gray-700 mb-1">
               Match Score Range
             </label>
@@ -119,7 +120,7 @@ export function MatchesPage() {
           </div>
 
           {/* Status Filter */}
-          <div className="flex-1 min-w-[200px]">
+          <div className="flex-1 min-w-0 sm:min-w-[200px]">
             <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
               Status
             </label>
@@ -165,9 +166,7 @@ export function MatchesPage() {
 
       {/* Loading State */}
       {isLoading ? (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-          <p className="text-gray-500">Loading your matches...</p>
-        </div>
+        <SkeletonList count={3} />
       ) : matches.length === 0 ? (
         /* Empty State */
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">

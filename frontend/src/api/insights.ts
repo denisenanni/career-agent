@@ -1,54 +1,14 @@
 import type { SkillAnalysis } from '../types'
-import { getToken } from './auth'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+import { apiFetch, buildQueryString } from './client'
 
 export async function fetchSkillInsights(refresh = false): Promise<SkillAnalysis> {
-  const token = getToken()
-  if (!token) {
-    throw new Error('Not authenticated')
-  }
-
-  const params = new URLSearchParams()
-  if (refresh) params.append('refresh', 'true')
-
-  const response = await fetch(`${API_URL}/api/insights/skills?${params.toString()}`, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-    },
-  })
-
-  if (!response.ok) {
-    if (response.status === 400) {
-      const error = await response.json()
-      throw new Error(error.detail || 'Bad request')
-    }
-    throw new Error('Failed to fetch skill insights')
-  }
-
-  return response.json()
+  const queryString = buildQueryString({ refresh: refresh ? 'true' : undefined })
+  return apiFetch<SkillAnalysis>(`/api/insights/skills${queryString}`, { requiresAuth: true })
 }
 
 export async function refreshSkillInsights(): Promise<SkillAnalysis> {
-  const token = getToken()
-  if (!token) {
-    throw new Error('Not authenticated')
-  }
-
-  const response = await fetch(`${API_URL}/api/insights/skills/refresh`, {
+  return apiFetch<SkillAnalysis>('/api/insights/skills/refresh', {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-    },
+    requiresAuth: true,
   })
-
-  if (!response.ok) {
-    if (response.status === 400) {
-      const error = await response.json()
-      throw new Error(error.detail || 'Bad request')
-    }
-    throw new Error('Failed to refresh skill insights')
-  }
-
-  return response.json()
 }

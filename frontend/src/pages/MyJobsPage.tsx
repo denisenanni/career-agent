@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Briefcase, Trash2, ExternalLink, MapPin, DollarSign } from 'lucide-react'
+import { SkeletonList } from '../components/SkeletonCard'
+import { LoadingSpinner } from '../components/LoadingSpinner'
 import { getUserJobs, deleteUserJob, parseJobText, createUserJob, type UserJob, type UserJobCreate } from '../api/userJobs'
 
 export function MyJobsPage() {
@@ -131,8 +133,9 @@ export function MyJobsPage() {
                 <button
                   onClick={handleParse}
                   disabled={parsing || jobText.length < 50}
-                  className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 disabled:bg-gray-400"
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 disabled:bg-gray-400 flex items-center gap-2"
                 >
+                  {parsing && <LoadingSpinner size="sm" />}
                   {parsing ? 'Parsing with AI...' : 'Parse Job'}
                 </button>
                 <button
@@ -186,7 +189,7 @@ export function MyJobsPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Remote Type
@@ -284,9 +287,7 @@ export function MyJobsPage() {
 
       {/* Loading State */}
       {isLoading ? (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-          <p className="text-gray-500">Loading your jobs...</p>
-        </div>
+        <SkeletonList count={2} />
       ) : jobs.length === 0 ? (
         /* Empty State */
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">

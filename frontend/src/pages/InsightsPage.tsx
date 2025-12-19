@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { LoadingSpinner } from '../components/LoadingSpinner'
 import { fetchSkillInsights, refreshSkillInsights } from '../api/insights'
 
 export function InsightsPage() {
@@ -82,9 +83,7 @@ export function InsightsPage() {
 
       {/* Loading State */}
       {isLoading ? (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-          <p className="text-gray-500">Analyzing market data...</p>
-        </div>
+        <LoadingSpinner size="lg" text="Analyzing market data..." />
       ) : !data ? (
         /* Empty/Error State */
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">

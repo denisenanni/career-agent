@@ -440,13 +440,17 @@ yarn dev --debug
 - ✅ HTML template extracted for maintainability
 - ✅ Email allowlist for registration control (with admin API)
 
+**Bug Fixes:**
+- ✅ Fixed SQLAlchemy session error in profile update (`backend/app/routers/profile.py`) - query user from db session before updating
+- ✅ Fixed CORS error by adding port 5174 to allowed origins in .env
+
 ---
 
 ## Pending Features Checklist
 
 **Pre-Deployment Features:**
 - [x] User-Submitted Jobs - Allow users to paste/add custom job postings ✅
-- [ ] Employment Eligibility Filter - Geographic/visa restrictions
+- [x] Employment Eligibility Filter - Geographic/visa restrictions ✅
 - [ ] UI Polish - Loading states, errors, mobile responsiveness
 - [ ] Fix Remaining Tests - Get to 100% test coverage (21 backend tests failing)
 
@@ -458,50 +462,62 @@ yarn dev --debug
 
 ---
 
+## ✅ Employment Eligibility Filter (COMPLETED)
+
+**Goal:** Filter jobs based on geographic restrictions and visa sponsorship requirements to avoid showing users jobs they can't apply for.
+
+**Implementation:**
+
+1. **Database Migration** (`05069ca43c64_add_employment_eligibility_fields_to_.py`):
+   - Added `eligible_regions` (JSON) to jobs table - default `["Worldwide"]`
+   - Added `visa_sponsorship` (Integer: 0/1/NULL) to jobs table
+   - 0 = no sponsorship, 1 = yes, NULL = not specified
+
+2. **LLM Extraction** (`backend/app/services/llm.py`):
+   - Updated `extract_job_requirements()` prompt to extract eligibility data
+   - Claude Haiku now extracts `eligible_regions` (e.g., ["US", "EU", "Worldwide"])
+   - Extracts `visa_sponsorship` (true/false/null)
+   - Examples:
+     - "US citizens only" → `{"eligible_regions": ["US"], "visa_sponsorship": null}`
+     - "Remote worldwide, visa sponsorship available" → `{"eligible_regions": ["Worldwide"], "visa_sponsorship": true}`
+
+3. **Job Model** (`backend/app/models/job.py`):
+   - Added `eligible_regions` column with default `["Worldwide"]`
+   - Added `visa_sponsorship` column (nullable Integer)
+
+4. **Matching Service** (`backend/app/services/matching.py`):
+   - Added `should_match_eligibility()` hard filter function
+   - Filters jobs BEFORE expensive LLM calls (like remote_type filtering)
+   - Checks regional overlap between user and job
+   - Filters out jobs with no visa sponsorship if user needs it
+   - Automatically saves extracted eligibility data to Job table during first match
+
+5. **User Preferences** (`backend/app/routers/profile.py`):
+   - User preferences stored in JSON field (no schema changes needed)
+   - Fields: `eligible_regions` (array) and `needs_visa_sponsorship` (boolean)
+
+6. **Frontend UI** (`frontend/src/components/PreferencesForm.tsx`):
+   - Added "Employment Eligibility" section with checkboxes:
+     - Worldwide, US, EU, UK, Canada, Australia, Asia
+   - Added "I need visa sponsorship" checkbox
+   - Both saved to user preferences and used in matching filter
+
+**How It Works:**
+- User sets eligible regions and visa needs in Profile → Job Preferences
+- When matching, jobs are filtered by eligibility before creating matches
+- Jobs restricted to regions user hasn't selected are filtered out
+- Jobs explicitly not offering visa sponsorship are filtered for users who need it
+- Extracted eligibility data is cached in the Job table for efficiency
+
+**Files Changed:**
+- Migration: `backend/migrations/versions/05069ca43c64_*.py`
+- Models: `backend/app/models/job.py:54-55`
+- Services: `backend/app/services/llm.py:177-194`, `backend/app/services/matching.py:108-150, 400-412, 436-439`
+- Frontend: `frontend/src/components/PreferencesForm.tsx:17-18, 27-28, 51-55, 71-72, 192-240`
+
+---
+
 ## Future Improvements
-
-### Employment Eligibility Filter
-
-**Problem:** Some jobs are restricted to specific countries/regions (e.g., "US nationals only", "EU work authorization required")
-
-**Proposed Solution:**
-1. **LLM Extraction:**
-   - Update job requirements extraction prompt to detect eligibility restrictions
-   - Extract: `eligible_regions` (["US", "EU", "Worldwide", etc.])
-   - Extract: `visa_sponsorship` (true/false)
-
-2. **Database Schema:**
-   ```sql
-   ALTER TABLE jobs
-   ADD COLUMN eligible_regions JSONB DEFAULT '["Worldwide"]',
-   ADD COLUMN visa_sponsorship BOOLEAN DEFAULT NULL;
-   ```
-
-3. **User Profile:**
-   - Add `current_location` or `citizenship` to user preferences
-   - Add `needs_visa_sponsorship` boolean
-
-4. **Matching Logic:**
-   - Hard filter jobs by eligibility before creating matches
-   - Skip jobs where user's location doesn't match `eligible_regions`
-   - If user needs sponsorship, filter out jobs with `visa_sponsorship: false`
-
-**Example Prompts:**
-```
-Job posting text: "Must be authorized to work in the US. No visa sponsorship."
-Extracted: {
-  "eligible_regions": ["US"],
-  "visa_sponsorship": false
-}
-
-Job posting text: "Remote position, candidates from EU/US/Canada welcome. Visa sponsorship available."
-Extracted: {
-  "eligible_regions": ["EU", "US", "Canada"],
-  "visa_sponsorship": true
-}
-```
-
-**Priority:** Medium (after deployment)
 
 ---
 

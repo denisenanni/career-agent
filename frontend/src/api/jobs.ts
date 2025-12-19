@@ -1,52 +1,18 @@
 import type { Job, JobsResponse, JobFilters } from '../types'
-import { getToken } from './auth'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+import { apiFetch, buildQueryString } from './client'
 
 export async function fetchJobs(filters: JobFilters = {}): Promise<JobsResponse> {
-  const params = new URLSearchParams()
-
-  if (filters.source) params.append('source', filters.source)
-  if (filters.job_type) params.append('job_type', filters.job_type)
-  if (filters.remote_type) params.append('remote_type', filters.remote_type)
-  if (filters.min_salary) params.append('min_salary', filters.min_salary.toString())
-  if (filters.search) params.append('search', filters.search)
-  if (filters.limit) params.append('limit', filters.limit.toString())
-  if (filters.offset) params.append('offset', filters.offset.toString())
-
-  const response = await fetch(`${API_URL}/api/jobs?${params.toString()}`)
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch jobs')
-  }
-
-  return response.json()
+  const queryString = buildQueryString(filters)
+  return apiFetch<JobsResponse>(`/api/jobs${queryString}`)
 }
 
 export async function fetchJob(id: number): Promise<Job> {
-  const response = await fetch(`${API_URL}/api/jobs/${id}`)
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch job')
-  }
-
-  return response.json()
+  return apiFetch<Job>(`/api/jobs/${id}`)
 }
 
 export async function refreshJobs(): Promise<void> {
-  const token = getToken()
-  if (!token) {
-    throw new Error('Not authenticated')
-  }
-
-  const response = await fetch(`${API_URL}/api/jobs/refresh`, {
+  return apiFetch<void>('/api/jobs/refresh', {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-    },
+    requiresAuth: true,
   })
-
-  if (!response.ok) {
-    throw new Error('Failed to trigger job refresh')
-  }
 }

@@ -48,9 +48,9 @@ export const MatchCard = memo(function MatchCard({ match }: MatchCardProps) {
   return (
     <div className={`bg-white rounded-lg shadow-sm border-2 ${scoreColor.includes('green') ? 'border-green-200' : 'border-gray-200'} p-6 hover:shadow-md transition-shadow`}>
       {/* Header */}
-      <div className="flex justify-between items-start mb-3">
-        <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-3">
+        <div className="flex-1 min-w-0">
+          <h3 className="text-lg font-semibold text-gray-900 mb-1 break-words">
             <a
               href={match.job_url}
               target="_blank"
@@ -62,7 +62,7 @@ export const MatchCard = memo(function MatchCard({ match }: MatchCardProps) {
           </h3>
           <p className="text-gray-600 font-medium">{match.job_company}</p>
         </div>
-        <div className="flex flex-col items-end gap-2">
+        <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 flex-shrink-0">
           <div className={`px-3 py-1 rounded-full font-bold text-lg ${scoreColor} border`}>
             {match.score}%
           </div>

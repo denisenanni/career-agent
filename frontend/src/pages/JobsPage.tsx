@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { JobCard } from '../components/JobCard'
+import { SkeletonList } from '../components/SkeletonCard'
 import { fetchJobs, refreshJobs } from '../api/jobs'
 import type { JobFilters } from '../types'
 
@@ -88,9 +89,7 @@ export function JobsPage() {
       </form>
 
       {isLoading ? (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-          <p className="text-gray-500">Loading jobs...</p>
-        </div>
+        <SkeletonList count={5} />
       ) : jobs.length === 0 ? (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
           <p className="text-gray-500">

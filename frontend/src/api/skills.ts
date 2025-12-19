@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+import { apiFetch, buildQueryString } from './client'
 
 export interface PopularSkillsResponse {
   skills: string[]
@@ -12,27 +12,13 @@ export interface AddCustomSkillResponse {
 }
 
 export async function getPopularSkills(limit: number = 200): Promise<PopularSkillsResponse> {
-  const response = await fetch(`${API_URL}/api/skills/popular?limit=${limit}`)
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch popular skills')
-  }
-
-  return response.json()
+  const queryString = buildQueryString({ limit })
+  return apiFetch<PopularSkillsResponse>(`/api/skills/popular${queryString}`)
 }
 
 export async function addCustomSkill(skill: string): Promise<AddCustomSkillResponse> {
-  const response = await fetch(`${API_URL}/api/skills/custom`, {
+  return apiFetch<AddCustomSkillResponse>('/api/skills/custom', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
     body: JSON.stringify({ skill }),
   })
-
-  if (!response.ok) {
-    throw new Error('Failed to add custom skill')
-  }
-
-  return response.json()
 }

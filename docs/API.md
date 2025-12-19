@@ -14,6 +14,7 @@ Complete API reference for the Career Agent backend.
 - [Authentication](#authentication)
 - [Profile](#profile)
 - [Jobs](#jobs)
+- [User-Submitted Jobs](#user-submitted-jobs)
 - [Matches](#matches)
 - [Generation](#generation)
 - [Insights](#insights)
@@ -197,10 +198,12 @@ Update user profile and preferences.
   "experience_years": 6,
   "preferences": {
     "target_roles": ["Senior Software Engineer", "Tech Lead"],
-    "remote_only": true,
+    "remote_types": ["full", "hybrid"],
     "min_salary": 120000,
-    "max_salary": 180000,
-    "job_types": ["permanent"]
+    "job_types": ["permanent"],
+    "preferred_countries": ["United States", "Canada", "Remote"],
+    "eligible_regions": ["US", "Canada", "Worldwide"],
+    "needs_visa_sponsorship": false
   }
 }
 ```
@@ -229,6 +232,15 @@ Update user profile and preferences.
 - All fields are optional (partial updates supported)
 - Skills must be an array of strings
 - Preferences can include custom fields
+
+**Preference Fields:**
+- `target_roles` (array): Target job titles
+- `remote_types` (array): "full", "hybrid", "onsite"
+- `min_salary` (number): Minimum acceptable salary
+- `job_types` (array): "permanent", "contract", "freelance", "part-time"
+- `preferred_countries` (array): Preferred work locations
+- `eligible_regions` (array): Regions where you can legally work (e.g., ["US", "EU", "Worldwide"])
+- `needs_visa_sponsorship` (boolean): Whether you need visa sponsorship
 
 ---
 
@@ -365,6 +377,8 @@ GET /api/jobs?search=python&remote_type=full&limit=20&offset=0
       "remote_type": "full",
       "job_type": "permanent",
       "tags": ["Python", "Django", "PostgreSQL", "Docker"],
+      "eligible_regions": ["Worldwide"],
+      "visa_sponsorship": null,
       "posted_at": "2024-12-15T09:00:00Z",
       "scraped_at": "2024-12-18T08:00:00Z"
     }
@@ -380,6 +394,11 @@ GET /api/jobs?search=python&remote_type=full&limit=20&offset=0
 - Uses full-text search on title, company, description
 - Results sorted by `scraped_at DESC` (newest first)
 - Efficient pagination with window functions
+
+**Employment Eligibility Fields:**
+- `eligible_regions` (array): Geographic regions where candidates can apply (e.g., ["US", "EU", "Worldwide"])
+- `visa_sponsorship` (integer): Visa sponsorship availability (0 = no, 1 = yes, null = not specified)
+- These fields are extracted from job descriptions using AI during matching
 
 ---
 
@@ -439,6 +458,245 @@ Trigger job scraping from configured sources.
 - Asynchronous operation (jobs scraped in background)
 - Creates scrape log entry for tracking
 - Only authenticated users can trigger scraping
+
+---
+
+## User-Submitted Jobs
+
+User-submitted jobs allow users to paste job postings they found elsewhere and add them to their profile for matching and tracking.
+
+### Parse Job Text
+
+Parse pasted job text using AI to extract structured information.
+
+**Endpoint:** `POST /api/user-jobs/parse`
+**Authentication:** Required
+
+**Request Body:**
+```json
+{
+  "job_text": "Senior Python Developer\nTechCorp Inc. - Remote\n\nWe're looking for an experienced Python developer...\n\nRequirements:\n- 5+ years of Python experience\n- Django and FastAPI\n- PostgreSQL\n\nSalary: $120,000 - $160,000 USD\nLocation: Remote (US only)\n\nApply at: https://techcorp.com/careers/123"
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "title": "Senior Python Developer",
+  "company": "TechCorp Inc.",
+  "description": "We're looking for an experienced Python developer to join our team.",
+  "url": "https://techcorp.com/careers/123",
+  "location": "Remote (US only)",
+  "remote_type": "full",
+  "job_type": "permanent",
+  "salary_min": 120000,
+  "salary_max": 160000,
+  "salary_currency": "USD",
+  "tags": ["Python", "Django", "FastAPI", "PostgreSQL"]
+}
+```
+
+**Errors:**
+- `400 Bad Request` - Job text too short (minimum 50 characters)
+- `500 Internal Server Error` - AI parsing failed
+
+**Notes:**
+- Uses Claude Haiku for extraction
+- User can review and edit extracted data before saving
+- Automatically extracts URL if present in text
+
+---
+
+### Create User Job
+
+Create a new user-submitted job posting.
+
+**Endpoint:** `POST /api/user-jobs`
+**Authentication:** Required
+
+**Request Body:**
+```json
+{
+  "title": "Senior Python Developer",
+  "company": "TechCorp Inc.",
+  "description": "We're looking for an experienced Python developer...",
+  "url": "https://techcorp.com/careers/123",
+  "location": "Remote (US only)",
+  "remote_type": "full",
+  "job_type": "permanent",
+  "salary_min": 120000,
+  "salary_max": 160000,
+  "salary_currency": "USD",
+  "tags": ["Python", "Django", "FastAPI", "PostgreSQL"]
+}
+```
+
+**Response:** `201 Created`
+```json
+{
+  "id": 1,
+  "user_id": 1,
+  "title": "Senior Python Developer",
+  "company": "TechCorp Inc.",
+  "description": "We're looking for an experienced Python developer...",
+  "url": "https://techcorp.com/careers/123",
+  "source": "user_submitted",
+  "tags": ["Python", "Django", "FastAPI", "PostgreSQL"],
+  "salary_min": 120000,
+  "salary_max": 160000,
+  "salary_currency": "USD",
+  "location": "Remote (US only)",
+  "remote_type": "full",
+  "job_type": "permanent",
+  "created_at": "2024-12-18T12:00:00Z",
+  "updated_at": "2024-12-18T12:00:00Z"
+}
+```
+
+**Errors:**
+- `400 Bad Request` - Duplicate job (same user, company, title)
+- `422 Unprocessable Entity` - Missing required fields (title, description)
+
+**Notes:**
+- Automatically creates a match for the user with min_score=0
+- Only required fields: `title` and `description`
+- Company can be null for unknown employers
+
+---
+
+### List User Jobs
+
+Get all jobs submitted by the current user.
+
+**Endpoint:** `GET /api/user-jobs`
+**Authentication:** Required
+
+**Response:** `200 OK`
+```json
+{
+  "jobs": [
+    {
+      "id": 1,
+      "user_id": 1,
+      "title": "Senior Python Developer",
+      "company": "TechCorp Inc.",
+      "description": "We're looking for...",
+      "url": "https://techcorp.com/careers/123",
+      "source": "user_submitted",
+      "tags": ["Python", "Django", "FastAPI"],
+      "salary_min": 120000,
+      "salary_max": 160000,
+      "salary_currency": "USD",
+      "location": "Remote (US only)",
+      "remote_type": "full",
+      "job_type": "permanent",
+      "created_at": "2024-12-18T12:00:00Z",
+      "updated_at": "2024-12-18T12:00:00Z"
+    }
+  ],
+  "total": 1
+}
+```
+
+**Notes:**
+- Returns jobs ordered by creation date (newest first)
+- Only returns jobs belonging to the authenticated user
+
+---
+
+### Get User Job
+
+Get details of a specific user-submitted job.
+
+**Endpoint:** `GET /api/user-jobs/{job_id}`
+**Authentication:** Required
+
+**Response:** `200 OK`
+```json
+{
+  "id": 1,
+  "user_id": 1,
+  "title": "Senior Python Developer",
+  "company": "TechCorp Inc.",
+  "description": "We're looking for an experienced Python developer...",
+  "url": "https://techcorp.com/careers/123",
+  "source": "user_submitted",
+  "tags": ["Python", "Django", "FastAPI", "PostgreSQL"],
+  "salary_min": 120000,
+  "salary_max": 160000,
+  "salary_currency": "USD",
+  "location": "Remote (US only)",
+  "remote_type": "full",
+  "job_type": "permanent",
+  "created_at": "2024-12-18T12:00:00Z",
+  "updated_at": "2024-12-18T12:00:00Z"
+}
+```
+
+**Errors:**
+- `404 Not Found` - Job not found or belongs to another user
+
+---
+
+### Update User Job
+
+Update a user-submitted job.
+
+**Endpoint:** `PUT /api/user-jobs/{job_id}`
+**Authentication:** Required
+
+**Request Body:**
+```json
+{
+  "title": "Updated Title",
+  "salary_min": 130000,
+  "tags": ["Python", "FastAPI", "PostgreSQL", "Docker"]
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "id": 1,
+  "user_id": 1,
+  "title": "Updated Title",
+  "company": "TechCorp Inc.",
+  "description": "We're looking for...",
+  "url": "https://techcorp.com/careers/123",
+  "source": "user_submitted",
+  "tags": ["Python", "FastAPI", "PostgreSQL", "Docker"],
+  "salary_min": 130000,
+  "salary_max": 160000,
+  "salary_currency": "USD",
+  "location": "Remote (US only)",
+  "remote_type": "full",
+  "job_type": "permanent",
+  "created_at": "2024-12-18T12:00:00Z",
+  "updated_at": "2024-12-18T13:00:00Z"
+}
+```
+
+**Notes:**
+- All fields are optional (partial updates supported)
+- Only the owner can update their jobs
+
+**Errors:**
+- `404 Not Found` - Job not found or belongs to another user
+- `400 Bad Request` - Duplicate title/company combination
+
+---
+
+### Delete User Job
+
+Delete a user-submitted job.
+
+**Endpoint:** `DELETE /api/user-jobs/{job_id}`
+**Authentication:** Required
+
+**Response:** `204 No Content`
+
+**Errors:**
+- `404 Not Found` - Job not found or belongs to another user
 
 ---
 

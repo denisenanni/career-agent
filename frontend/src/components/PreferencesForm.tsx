@@ -11,6 +11,7 @@ export function PreferencesForm() {
 
   // Form state
   const [minSalary, setMinSalary] = useState<number | ''>('')
+  const [minSalaryError, setMinSalaryError] = useState('')
   const [jobTypes, setJobTypes] = useState<string[]>([])
   const [remoteTypes, setRemoteTypes] = useState<string[]>([])
   const [preferredCountries, setPreferredCountries] = useState<string[]>([])
@@ -54,6 +55,19 @@ export function PreferencesForm() {
     )
   }
 
+  const validateMinSalary = (value: number | '') => {
+    if (value !== '' && value < 0) {
+      setMinSalaryError('Salary must be a positive number')
+      return false
+    }
+    if (value !== '' && value > 10000000) {
+      setMinSalaryError('Salary seems unreasonably high')
+      return false
+    }
+    setMinSalaryError('')
+    return true
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -93,19 +107,32 @@ export function PreferencesForm() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="minSalary" className="block text-sm font-medium text-gray-700">
+          <label htmlFor="minSalary" className="block text-sm font-medium text-gray-700 mb-1">
             Minimum Salary (USD/year)
           </label>
           <input
             id="minSalary"
             type="number"
             value={minSalary}
-            onChange={(e) => setMinSalary(e.target.value ? Number(e.target.value) : '')}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-3 py-2 border"
-            placeholder="120000"
+            onChange={(e) => {
+              const value = e.target.value ? Number(e.target.value) : ''
+              setMinSalary(value)
+              if (minSalaryError) validateMinSalary(value)
+            }}
+            onBlur={(e) => {
+              const value = e.target.value ? Number(e.target.value) : ''
+              validateMinSalary(value)
+            }}
+            className={`mt-1 block w-full rounded-md shadow-sm focus:ring-indigo-500 px-3 py-2 border ${
+              minSalaryError ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-indigo-500'
+            }`}
+            placeholder="e.g., 120000"
             min="0"
             step="1000"
           />
+          {minSalaryError && (
+            <p className="mt-1 text-sm text-red-600">{minSalaryError}</p>
+          )}
         </div>
 
         <div>

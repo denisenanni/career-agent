@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { generateCoverLetter, generateCVHighlights, regenerateContent } from '../api/matches'
+import { LoadingSpinner } from './LoadingSpinner'
 import type { CoverLetterResponse, CVHighlightsResponse } from '../types'
 
 interface ApplicationMaterialsModalProps {
@@ -139,8 +140,8 @@ export function ApplicationMaterialsModal({
               {coverLetterMutation.isPending && (
                 <div className="flex items-center justify-center py-12">
                   <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Generating cover letter...</p>
+                    <LoadingSpinner size="lg" />
+                    <p className="text-gray-600 mt-4">Generating cover letter...</p>
                     <p className="text-sm text-gray-500 mt-1">Using Claude Sonnet 4.5</p>
                   </div>
                 </div>
@@ -173,8 +174,8 @@ export function ApplicationMaterialsModal({
               {highlightsMutation.isPending && (
                 <div className="flex items-center justify-center py-12">
                   <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Generating CV highlights...</p>
+                    <LoadingSpinner size="lg" />
+                    <p className="text-gray-600 mt-4">Generating CV highlights...</p>
                     <p className="text-sm text-gray-500 mt-1">Using Claude Haiku</p>
                   </div>
                 </div>
@@ -209,7 +210,7 @@ export function ApplicationMaterialsModal({
         </div>
 
         {/* Actions */}
-        <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
+        <div className="px-6 py-4 border-t border-gray-200 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
           <div>
             {!showRegenerateConfirm && (
               <button
@@ -221,26 +222,28 @@ export function ApplicationMaterialsModal({
               </button>
             )}
             {showRegenerateConfirm && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                 <span className="text-sm text-gray-700">Regenerate all content?</span>
-                <button
-                  onClick={() => regenerateMutation.mutate()}
-                  disabled={regenerateMutation.isPending}
-                  className="text-sm px-3 py-1 bg-red-50 text-red-700 rounded hover:bg-red-100 disabled:opacity-50"
-                >
-                  {regenerateMutation.isPending ? 'Regenerating...' : 'Yes'}
-                </button>
-                <button
-                  onClick={() => setShowRegenerateConfirm(false)}
-                  className="text-sm px-3 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-                >
-                  Cancel
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => regenerateMutation.mutate()}
+                    disabled={regenerateMutation.isPending}
+                    className="text-sm px-3 py-1 bg-red-50 text-red-700 rounded hover:bg-red-100 disabled:opacity-50"
+                  >
+                    {regenerateMutation.isPending ? 'Regenerating...' : 'Yes'}
+                  </button>
+                  <button
+                    onClick={() => setShowRegenerateConfirm(false)}
+                    className="text-sm px-3 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             )}
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {activeTab === 'cover-letter' && coverLetterData && (
               <>
                 <button
