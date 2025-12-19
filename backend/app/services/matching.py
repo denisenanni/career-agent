@@ -365,26 +365,26 @@ def calculate_match_score(
     # Calculate individual scores
     skill_score, matching_skills, missing_skills = calculate_skill_match(user_skills, job_requirements)
     title_score = calculate_title_match(user, job)
-    work_type_score = calculate_work_type_match(user_prefs, job)
+    # Note: work_type is now a hard filter (handled by should_match_remote_type)
+    # and is no longer part of the scoring algorithm
     location_score = calculate_location_match(user_prefs, job)
     salary_score = calculate_salary_match(user_prefs, job)
     experience_score = calculate_experience_match(user, job_requirements)
 
     # Weighted average (total = 100%)
     # Title matching is critical - prevent irrelevant role matches
+    # Remote/work type is a hard filter, not included in scoring
     weights = {
-        "skills": 0.35,          # 35% (reduced from 45%)
-        "title": 0.20,           # 20% (NEW - prevents "Director" for ICs)
-        "work_type": 0.10,       # 10% (reduced from 15%)
-        "location": 0.10,        # 10% (reduced from 15%)
+        "skills": 0.40,          # 40% (was 35%, +5% from removing work_type)
+        "title": 0.20,           # 20% (prevents "Director" for ICs)
+        "location": 0.10,        # 10%
         "salary": 0.10,          # 10%
-        "experience": 0.15,      # 15%
+        "experience": 0.20,      # 20% (was 15%, +5% from removing work_type)
     }
 
     overall_score = (
         skill_score * weights["skills"] +
         title_score * weights["title"] +
-        work_type_score * weights["work_type"] +
         location_score * weights["location"] +
         salary_score * weights["salary"] +
         experience_score * weights["experience"]
@@ -394,7 +394,6 @@ def calculate_match_score(
         "overall_score": round(overall_score, 2),
         "skill_score": round(skill_score, 2),
         "title_score": round(title_score, 2),
-        "work_type_score": round(work_type_score, 2),
         "location_score": round(location_score, 2),
         "salary_score": round(salary_score, 2),
         "experience_score": round(experience_score, 2),

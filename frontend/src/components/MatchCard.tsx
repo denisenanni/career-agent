@@ -129,14 +129,10 @@ export const MatchCard = memo(function MatchCard({ match }: MatchCardProps) {
       </div>
 
       {/* Match Breakdown */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3 text-xs">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3 text-xs">
         <div className="text-center p-2 bg-gray-50 rounded">
           <div className="font-semibold text-gray-900">{match.reasoning.skill_score}%</div>
           <div className="text-gray-600">Skills</div>
-        </div>
-        <div className="text-center p-2 bg-gray-50 rounded">
-          <div className="font-semibold text-gray-900">{match.reasoning.work_type_score}%</div>
-          <div className="text-gray-600">Work Type</div>
         </div>
         <div className="text-center p-2 bg-gray-50 rounded">
           <div className="font-semibold text-gray-900">{match.reasoning.location_score}%</div>
@@ -211,7 +207,6 @@ export const MatchCard = memo(function MatchCard({ match }: MatchCardProps) {
             <span className="font-semibold">Matching Algorithm Weights: </span>
             <span className="text-gray-700">
               Skills: {(match.reasoning.weights.skills * 100).toFixed(0)}%,
-              Work Type: {(match.reasoning.weights.work_type * 100).toFixed(0)}%,
               Location: {(match.reasoning.weights.location * 100).toFixed(0)}%,
               Salary: {(match.reasoning.weights.salary * 100).toFixed(0)}%,
               Experience: {(match.reasoning.weights.experience * 100).toFixed(0)}%

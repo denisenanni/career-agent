@@ -113,7 +113,7 @@ export interface Match {
   reasoning: {
     overall_score: number
     skill_score: number
-    work_type_score: number
+    work_type_score?: number  // Optional: work type is now a hard filter, not scored
     location_score: number
     salary_score: number
     experience_score: number
