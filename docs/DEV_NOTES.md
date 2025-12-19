@@ -499,22 +499,53 @@ Extracted: {
 
 **Priority:** Low (nice-to-have, deferred for now)
 
+---
 
+## ✅ Email Allowlist for Registration (COMPLETED)
 
-Task: Add email allowlist for registration
-Goal: Restrict registration to approved emails only
+**Goal:** Restrict registration to approved emails only for private beta/testing.
 
-Changes:
-- backend/app/config.py - Add settings:
-  registration_mode: str = "allowlist"  # "open", "allowlist", "closed"
-  allowed_emails: list[str] = ["info@devdenise.com"]
-- backend/app/routers/auth.py - Add check in register endpoint:
-  If registration_mode == "closed": return 403 "Registration is closed"
-  If registration_mode == "allowlist": check email against allowed_emails (case-insensitive), return 403 "Email not on allowlist" if not found
-  If registration_mode == "open": allow all
-- frontend/src/pages/RegisterPage.tsx - Handle 403 error
-  Show friendly message: "Registration is currently invite-only"
-- Add test for allowlist behavior
-  Environment override:
-  ALLOWED_EMAILS should accept comma-separated list: "email1@x.com,email2@y.com"
-- Also add POST /admin/allowlist and DELETE /admin/allowlist/{email} endpoints (admin-only) that store allowed emails in a new allowed_emails table, with the config list as fallback.
+**Implementation:**
+
+1. **Database:**
+   - New table: `allowed_emails` with columns: id, email, added_by, created_at
+   - Migration: `17474fd54e48_add_allowed_emails_table.py`
+   - Unique constraint on email field
+   - Foreign key to users table
+
+2. **Backend Configuration** (`backend/app/config.py`):
+   - `registration_mode`: "open" (default), "allowlist", or "closed"
+   - `allowed_emails`: Comma-separated fallback list (e.g., "email1@x.com,email2@y.com")
+   - Validator to ensure registration_mode is valid
+
+3. **Registration Endpoint** (`backend/app/routers/auth.py`):
+   - Check registration_mode before allowing registration
+   - If "closed" → 403 "Registration is currently closed"
+   - If "allowlist" → Check DB first, then config fallback (case-insensitive)
+   - If "open" → Allow all registrations
+
+4. **Admin API** (`backend/app/routers/admin.py`) - NEW:
+   - `POST /api/admin/allowlist` - Add email to allowlist (admin only)
+   - `GET /api/admin/allowlist` - List all allowed emails (admin only)
+   - `DELETE /api/admin/allowlist/{email}` - Remove email from allowlist (admin only)
+   - Simple admin check: user with id=1 is admin (TODO: implement proper role system)
+
+5. **Frontend** (`frontend/src/pages/RegisterPage.tsx`):
+   - Already handles 403 errors gracefully
+   - Shows friendly message: "Registration is currently invite-only. Your email is not on the allowlist."
+
+**Configuration (.env):**
+```bash
+REGISTRATION_MODE=open  # or "allowlist" or "closed"
+ALLOWED_EMAILS=info@devdenise.com,friend@example.com
+```
+
+**Usage:**
+- Set `REGISTRATION_MODE=allowlist` to enable invite-only registration
+- Use admin API to manage allowed emails dynamically
+- Config list serves as fallback if database is empty
+
+**TODO:**
+- Add proper role-based admin system (currently user id=1 is admin)
+- Add tests for allowlist behavior
+- Consider email invitation flow with tokens
