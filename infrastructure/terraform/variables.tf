@@ -34,9 +34,10 @@ variable "postgres_user" {
 }
 
 variable "postgres_password" {
-  description = "PostgreSQL password"
+  description = "PostgreSQL password (auto-generated if not provided)"
   type        = string
   sensitive   = true
+  default     = null
 }
 
 # =============================================================================
@@ -66,9 +67,10 @@ variable "anthropic_api_key" {
 }
 
 variable "jwt_secret" {
-  description = "JWT secret for authentication (generate with: openssl rand -base64 32)"
+  description = "JWT secret for authentication (auto-generated if not provided)"
   type        = string
   sensitive   = true
+  default     = null
 }
 
 # =============================================================================

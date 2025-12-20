@@ -16,12 +16,12 @@ project_name = "career-agent"
 # =============================================================================
 
 # Get your Railway API token from: https://railway.app/account/tokens
-#railway_api_token = "0dd9d791b-f657-4b35-898b-dcbe5f415905"
+railway_api_token = ""
 
 # Database credentials (will be used for PostgreSQL service)
 postgres_db       = "career_agent"
 postgres_user     = "career_agent"
-postgres_password = ""  # Generate a secure password
+# postgres_password = ""  # Optional: auto-generated if not set
 
 # =============================================================================
 # Vercel
@@ -40,8 +40,7 @@ vercel_team_id = null
 # Get your Anthropic API key from: https://console.anthropic.com/
 anthropic_api_key = ""
 
-# Generate a secure JWT secret with: openssl rand -base64 32
-jwt_secret = ""
+# jwt_secret = ""  # Optional: auto-generated if not set
 
 # =============================================================================
 # GitHub Repository

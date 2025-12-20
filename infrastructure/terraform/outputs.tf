@@ -13,6 +13,22 @@ output "railway_project_name" {
 }
 
 # =============================================================================
+# Generated Secrets
+# =============================================================================
+
+output "generated_postgres_password" {
+  description = "Auto-generated PostgreSQL password (if not provided)"
+  value       = local.postgres_password
+  sensitive   = true
+}
+
+output "generated_jwt_secret" {
+  description = "Auto-generated JWT secret (if not provided)"
+  value       = local.jwt_secret
+  sensitive   = true
+}
+
+# =============================================================================
 # Database Outputs
 # =============================================================================
 
@@ -95,7 +111,7 @@ output "env_file_content" {
     ANTHROPIC_API_KEY=${var.anthropic_api_key}
 
     # Auth
-    JWT_SECRET=${var.jwt_secret}
+    JWT_SECRET=${local.jwt_secret}
     JWT_ALGORITHM=HS256
     JWT_EXPIRE_MINUTES=10080
   EOT

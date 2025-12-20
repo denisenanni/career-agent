@@ -2,8 +2,26 @@
 # Career Agent Infrastructure - Railway + Vercel
 # =============================================================================
 
+# =============================================================================
+# AUTO-GENERATED SECRETS (if not provided)
+# =============================================================================
+
+resource "random_password" "postgres_password" {
+  count   = var.postgres_password == null ? 1 : 0
+  length  = 32
+  special = false  # Railway-safe characters
+}
+
+resource "random_password" "jwt_secret" {
+  count   = var.jwt_secret == null ? 1 : 0
+  length  = 44
+  special = true
+}
+
 locals {
-  app_name = "${var.project_name}-${var.environment}"
+  app_name          = "${var.project_name}-${var.environment}"
+  postgres_password = var.postgres_password != null ? var.postgres_password : random_password.postgres_password[0].result
+  jwt_secret        = var.jwt_secret != null ? var.jwt_secret : random_password.jwt_secret[0].result
 }
 
 # =============================================================================
@@ -47,7 +65,7 @@ resource "railway_variable" "postgres_password" {
   project_id = railway_project.main.id
   service_id = railway_service.postgres.id
   name       = "POSTGRES_PASSWORD"
-  value      = var.postgres_password
+  value      = local.postgres_password
 }
 
 # =============================================================================
@@ -85,7 +103,7 @@ resource "railway_variable" "backend_database_url" {
   project_id = railway_project.main.id
   service_id = railway_service.backend.id
   name       = "DATABASE_URL"
-  value      = "postgresql://${var.postgres_user}:${var.postgres_password}@${railway_service.postgres.name}.railway.internal:5432/${var.postgres_db}"
+  value      = "postgresql://${var.postgres_user}:${local.postgres_password}@${railway_service.postgres.name}.railway.internal:5432/${var.postgres_db}"
 }
 
 resource "railway_variable" "backend_redis_url" {
@@ -106,7 +124,7 @@ resource "railway_variable" "backend_jwt_secret" {
   project_id = railway_project.main.id
   service_id = railway_service.backend.id
   name       = "JWT_SECRET"
-  value      = var.jwt_secret
+  value      = local.jwt_secret
 }
 
 resource "railway_variable" "backend_environment" {
