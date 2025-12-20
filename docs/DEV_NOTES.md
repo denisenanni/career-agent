@@ -292,11 +292,7 @@ git push                      # Push to remote
 
 ## Technical Debt
 
-See current technical debt tracked in ROADMAP.md. Priority items:
-- Test isolation issues (26 failing tests)
-- Complete test coverage (target: 90%+)
-- Add monitoring/metrics dashboard
-
+See current technical debt tracked in ROADMAP.md.
 ---
 
 ## Security Checklist
