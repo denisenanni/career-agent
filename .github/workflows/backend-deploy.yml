@@ -55,19 +55,12 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
 
-      - name: Trigger Railway deployment
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
-        run: |
-          # Use Railway GraphQL API to trigger deployment
-          curl -X POST https://backboard.railway.app/graphql \
-            -H "Authorization: Bearer $RAILWAY_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "query": "mutation serviceInstanceRedeploy($serviceId: String!, $environmentId: String!) { serviceInstanceRedeploy(serviceId: $serviceId, environmentId: $environmentId) }",
-              "variables": {
-                "serviceId": "85fc97dc-2be6-4075-b777-3213a744834c",
-                "environmentId": "2a707d71-adf3-44f2-9048-e4ea7657e916"
-              }
-            }'
+      # Railway deployment note:
+      # After the Docker image is pushed to GHCR, manually redeploy in Railway:
+      # 1. Go to Railway dashboard: https://railway.app
+      # 2. Open the backend service in career-agent-dev project
+      # 3. Click the "..." menu and select "Redeploy"
+      #
+      # Alternative: Configure Railway to watch GHCR registry:
+      # - Railway service settings → Enable "Watch for new image tags"
+      # - Service will auto-deploy when :latest tag is updated
