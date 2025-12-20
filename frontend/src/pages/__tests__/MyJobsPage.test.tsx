@@ -76,9 +76,10 @@ describe('MyJobsPage', () => {
         () => new Promise(() => {}) // Never resolves
       )
 
-      renderMyJobsPage()
+      const { container } = renderMyJobsPage()
 
-      expect(screen.getByText('Loading your jobs...')).toBeInTheDocument()
+      // Should show skeleton loading cards with animate-pulse class
+      expect(container.querySelector('.animate-pulse')).toBeInTheDocument()
     })
 
     it('shows empty state when user has no jobs', async () => {

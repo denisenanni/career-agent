@@ -1,14 +1,13 @@
-import { useState, useEffect } from 'react'
-import { Settings, CheckCircle, AlertCircle } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { Settings } from 'lucide-react'
 import { updateProfile } from '../api/profile'
 import { useAuth } from '../contexts/AuthContext'
+import { useAutoSave } from '../hooks/useAutoSave'
+import { SaveStatusIndicator } from './SaveStatusIndicator'
 import type { UserPreferences } from '../types'
 
 export function PreferencesForm() {
   const { user, refreshUser } = useAuth()
-  const [saving, setSaving] = useState(false)
-  const [success, setSuccess] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   // Form state
   const [minSalary, setMinSalary] = useState<number | ''>('')
@@ -18,6 +17,7 @@ export function PreferencesForm() {
   const [preferredCountries, setPreferredCountries] = useState<string[]>([])
   const [eligibleRegions, setEligibleRegions] = useState<string[]>([])
   const [needsVisaSponsorship, setNeedsVisaSponsorship] = useState(false)
+  const [isInitialized, setIsInitialized] = useState(false)
 
   // Load current preferences
   useEffect(() => {
@@ -28,8 +28,36 @@ export function PreferencesForm() {
       setPreferredCountries(user.preferences.preferred_countries || [])
       setEligibleRegions(user.preferences.eligible_regions || [])
       setNeedsVisaSponsorship(user.preferences.needs_visa_sponsorship || false)
+      // Mark as initialized after loading user data
+      setIsInitialized(true)
+    } else if (user) {
+      // User exists but no preferences yet
+      setIsInitialized(true)
     }
   }, [user])
+
+  // Build preferences object for auto-save
+  const preferences = useMemo((): UserPreferences => {
+    const prefs: UserPreferences = {}
+    if (minSalary !== '') prefs.min_salary = Number(minSalary)
+    if (jobTypes.length > 0) prefs.job_types = jobTypes
+    if (remoteTypes.length > 0) prefs.remote_types = remoteTypes
+    if (preferredCountries.length > 0) prefs.preferred_countries = preferredCountries
+    if (eligibleRegions.length > 0) prefs.eligible_regions = eligibleRegions
+    prefs.needs_visa_sponsorship = needsVisaSponsorship
+    return prefs
+  }, [minSalary, jobTypes, remoteTypes, preferredCountries, eligibleRegions, needsVisaSponsorship])
+
+  // Auto-save hook
+  const { status, error } = useAutoSave({
+    data: preferences,
+    onSave: async (prefs) => {
+      await updateProfile({ preferences: prefs })
+      await refreshUser()
+    },
+    debounceMs: 1500,
+    enabled: isInitialized, // Only enable after initial load
+  })
 
   // Toggle handlers for checkboxes
   const toggleJobType = (type: string) => {
@@ -69,44 +97,17 @@ export function PreferencesForm() {
     return true
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    setSuccess(false)
-    setSaving(true)
-
-    try {
-      // Build preferences object
-      const preferences: UserPreferences = {}
-
-      if (minSalary !== '') preferences.min_salary = Number(minSalary)
-      if (jobTypes.length > 0) preferences.job_types = jobTypes
-      if (remoteTypes.length > 0) preferences.remote_types = remoteTypes
-      if (preferredCountries.length > 0) preferences.preferred_countries = preferredCountries
-      if (eligibleRegions.length > 0) preferences.eligible_regions = eligibleRegions
-      preferences.needs_visa_sponsorship = needsVisaSponsorship
-
-      await updateProfile({ preferences })
-      await refreshUser()
-      setSuccess(true)
-
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccess(false), 3000)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save preferences')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <Settings className="w-5 h-5 text-gray-400" />
-        <h2 className="text-lg font-semibold text-gray-900">Job Preferences</h2>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Settings className="w-5 h-5 text-gray-400" />
+          <h2 className="text-lg font-semibold text-gray-900">Job Preferences</h2>
+        </div>
+        <SaveStatusIndicator status={status} error={error} />
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-4">
         <div>
           <label htmlFor="minSalary" className="block text-sm font-medium text-gray-700 mb-1">
             Minimum Salary (USD/year)
@@ -266,29 +267,7 @@ export function PreferencesForm() {
             Jobs that explicitly don't offer visa sponsorship will be filtered out
           </p>
         </div>
-
-        {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-md flex items-start gap-2">
-            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-            <p className="text-red-700 text-sm">{error}</p>
-          </div>
-        )}
-
-        {success && (
-          <div className="p-3 bg-green-50 border border-green-200 rounded-md flex items-start gap-2">
-            <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-            <p className="text-green-700 text-sm">Preferences saved successfully!</p>
-          </div>
-        )}
-
-        <button
-          type="submit"
-          disabled={saving}
-          className="w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {saving ? 'Saving...' : 'Save Preferences'}
-        </button>
-      </form>
+      </div>
     </div>
   )
 }

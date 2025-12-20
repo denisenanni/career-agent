@@ -202,8 +202,15 @@ describe('RegisterPage', () => {
     const user = userEvent.setup()
     renderRegisterPage()
 
-    const submitButton = screen.getByRole('button', { name: /create account/i })
-    await user.click(submitButton)
+    // Trigger blur on empty fields to show validation errors
+    const emailInput = screen.getByLabelText(/email address/i)
+    const passwordInput = screen.getByLabelText(/^password$/i)
+    const confirmPasswordInput = screen.getByLabelText(/confirm password/i)
+
+    await user.click(emailInput)
+    await user.tab() // blur email
+    await user.tab() // blur password
+    await user.tab() // blur confirm password
 
     // Should show all validation errors
     await waitFor(() => {

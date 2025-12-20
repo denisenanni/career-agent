@@ -17,19 +17,18 @@ const mockMatch: Match = {
   score: 85,
   status: 'matched',
   reasoning: {
+    overall_score: 85,
     skill_score: 90,
-    work_type_score: 80,
-    location_score: 85,
+    location_score: 75,
     salary_score: 80,
     experience_score: 85,
     matching_skills: ['React', 'TypeScript', 'Node.js'],
     missing_skills: ['Python', 'Go'],
     weights: {
       skills: 0.4,
-      work_type: 0.15,
-      location: 0.15,
-      salary: 0.15,
-      experience: 0.15,
+      location: 0.2,
+      salary: 0.2,
+      experience: 0.2,
     },
   },
   analysis: 'This is a great match based on your skills and experience.',
@@ -68,7 +67,8 @@ describe('MatchCard', () => {
 
     expect(screen.getByText('Senior Frontend Developer')).toBeInTheDocument()
     expect(screen.getByText('Tech Corp')).toBeInTheDocument()
-    expect(screen.getByText('85%')).toBeInTheDocument()
+    // 85% appears multiple times (main score + experience score)
+    expect(screen.getAllByText('85%').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Excellent Match')).toBeInTheDocument()
     expect(screen.getByText('San Francisco, CA')).toBeInTheDocument()
     expect(screen.getByText('$120,000 - $180,000')).toBeInTheDocument()
@@ -93,8 +93,10 @@ describe('MatchCard', () => {
     renderMatchCard()
 
     expect(screen.getByText('90%')).toBeInTheDocument() // Skills
-    expect(screen.getByText('80%')).toBeInTheDocument() // Work Type, Salary
-    expect(screen.getByText('85%')).toBeInTheDocument() // Location, Experience, Total
+    expect(screen.getByText('75%')).toBeInTheDocument() // Location
+    expect(screen.getByText('80%')).toBeInTheDocument() // Salary
+    // 85% appears multiple times (Experience score + Total score badge)
+    expect(screen.getAllByText('85%').length).toBeGreaterThanOrEqual(1)
   })
 
   it('should update status to interested when clicked', async () => {

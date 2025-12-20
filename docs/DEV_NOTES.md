@@ -290,6 +290,26 @@ git push                      # Push to remote
 
 ---
 
+## UI/UX Patterns
+
+### Auto-Save
+Profile forms (PreferencesForm, ParsedCVDisplay) use auto-save with debounce:
+- **Hook:** `useAutoSave` in `src/hooks/useAutoSave.ts`
+- **Debounce:** 1.5 seconds after last change
+- **Status indicator:** Shows "Saving..." → "✓ Saved" → (fades after 2s)
+- **No save button needed** - changes persist automatically
+
+```typescript
+const { status, error } = useAutoSave({
+  data: formData,
+  onSave: async (data) => { await updateProfile(data) },
+  debounceMs: 1500,
+  enabled: isInitialized,
+})
+```
+
+---
+
 ## Technical Debt
 
 See current technical debt tracked in ROADMAP.md.
