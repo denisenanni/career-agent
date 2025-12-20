@@ -64,7 +64,7 @@ output "redis_service_id" {
 
 output "backend_url" {
   description = "Backend API URL (Railway domain)"
-  value       = "https://${railway_service.backend.domain}"
+  value       = "https://${railway_service_domain.backend.domain}"
 }
 
 output "backend_service_id" {
@@ -125,7 +125,7 @@ output "deployment_info" {
   description = "Summary of deployed infrastructure"
   value = {
     project_name     = railway_project.main.name
-    backend_url      = "https://${railway_service.backend.domain}"
+    backend_url      = "https://${railway_service_domain.backend.domain}"
     frontend_url     = "https://${vercel_project_domain.frontend.domain}"
     database_service = railway_service.postgres.name
     redis_service    = railway_service.redis.name
