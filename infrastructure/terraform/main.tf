@@ -134,6 +134,13 @@ resource "railway_variable" "backend_log_level" {
   value          = var.environment == "production" ? "INFO" : "DEBUG"
 }
 
+resource "railway_variable" "backend_port" {
+  environment_id = railway_project.main.default_environment.id
+  service_id     = railway_service.backend.id
+  name           = "PORT"
+  value          = "8080"
+}
+
 resource "railway_variable" "backend_cors_origins" {
   environment_id = railway_project.main.default_environment.id
   service_id     = railway_service.backend.id
