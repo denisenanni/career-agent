@@ -62,8 +62,8 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          # Get the image tag (first tag from metadata)
-          IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
+          # Link to Railway project and service
+          railway link --project ${{ secrets.RAILWAY_PROJECT_ID }} --environment production
 
-          # Update Railway service to use the new Docker image
-          railway up --service backend --image $IMAGE_TAG
+          # Trigger redeploy - Railway will pull the latest :latest tag from GHCR
+          railway service --name backend redeploy

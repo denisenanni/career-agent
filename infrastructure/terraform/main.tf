@@ -213,3 +213,10 @@ resource "github_actions_secret" "vercel_project_id" {
   secret_name     = "VERCEL_PROJECT_ID"
   plaintext_value = vercel_project.frontend.id
 }
+
+# Railway Project ID for linking
+resource "github_actions_secret" "railway_project_id" {
+  repository      = split("/", var.github_repo)[1]
+  secret_name     = "RAILWAY_PROJECT_ID"
+  plaintext_value = railway_project.main.id
+}
