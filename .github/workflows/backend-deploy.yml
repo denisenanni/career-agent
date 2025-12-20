@@ -55,15 +55,5 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
 
-      - name: Install Railway CLI
-        run: npm i -g @railway/cli
-
-      - name: Deploy to Railway
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: |
-          # Link to Railway project
-          railway link --project ${{ secrets.RAILWAY_PROJECT_ID }}
-
-          # Deploy the service
-          railway up --service backend --detach
+      # Railway automatically pulls and deploys the :latest tag from GHCR
+      # No manual deployment needed!
