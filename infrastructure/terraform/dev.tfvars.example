@@ -1,0 +1,46 @@
+# =============================================================================
+# Career Agent - Terraform Configuration Template
+# =============================================================================
+# Copy this file to dev.tfvars and fill in your values
+# NEVER commit dev.tfvars - it contains secrets!
+# =============================================================================
+
+# Environment
+environment  = "dev"
+project_name = "career-agent"
+
+# =============================================================================
+# RAILWAY
+# =============================================================================
+# Get from: https://railway.app/account/tokens
+railway_api_token = "your-railway-api-token-here"
+
+# Database credentials (optional - auto-generated if not provided)
+postgres_db       = "career_agent"
+postgres_user     = "career_agent"
+postgres_password = null  # Leave null to auto-generate
+
+# =============================================================================
+# VERCEL
+# =============================================================================
+# Get from: https://vercel.com/account/tokens
+vercel_api_token = "your-vercel-api-token-here"
+
+# Optional - for team accounts
+vercel_team_id = null
+
+# =============================================================================
+# APPLICATION
+# =============================================================================
+# Get from: https://console.anthropic.com/
+anthropic_api_key = "your-anthropic-api-key-here"
+
+# JWT secret (optional - auto-generated if not provided)
+jwt_secret = null  # Leave null to auto-generate
+
+# =============================================================================
+# DOCKER IMAGE
+# =============================================================================
+# GitHub Actions builds and pushes to GHCR automatically
+# Only change this if you're using a different registry or repo
+backend_docker_image = "ghcr.io/denisenanni/career-agent/backend:latest"

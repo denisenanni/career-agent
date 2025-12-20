@@ -74,17 +74,32 @@ variable "jwt_secret" {
 }
 
 # =============================================================================
-# GIT REPOSITORY
+# DOCKER IMAGES
+# =============================================================================
+
+variable "backend_docker_image" {
+  description = "Backend Docker image from GHCR (deployed by GitHub Actions)"
+  type        = string
+  default     = "ghcr.io/denisenanni/career-agent/backend:latest"
+}
+
+# =============================================================================
+# GITHUB
 # =============================================================================
 
 variable "github_repo" {
-  description = "GitHub repository in format 'owner/repo'"
+  description = "GitHub repository (format: owner/repo)"
   type        = string
-  default     = "denisenanni/career-agent"
 }
 
 variable "github_branch" {
-  description = "GitHub branch to deploy from"
+  description = "GitHub branch for deployments"
   type        = string
   default     = "main"
+}
+
+variable "github_token" {
+  description = "GitHub personal access token for managing Actions secrets"
+  type        = string
+  sensitive   = true
 }

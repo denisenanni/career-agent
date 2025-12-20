@@ -1,211 +1,252 @@
-# Career Agent - Infrastructure as Code
+# Terraform Infrastructure
 
-This directory contains Terraform configuration for deploying the Career Agent infrastructure using Railway and Vercel.
+This directory contains the Terraform configuration for deploying Career Agent to Railway (backend) and Vercel (frontend) with fully automated CI/CD via GitHub Actions.
 
 ## Architecture
 
-- **Railway**: Hosts PostgreSQL, Redis, and FastAPI backend
-- **Vercel**: Hosts React frontend
+```
+GitHub Actions (CI/CD)
+├── Backend: Build Docker → Push to GHCR → Deploy to Railway
+└── Frontend: Build → Deploy to Vercel CLI
 
-## Prerequisites
+Railway
+├── PostgreSQL (Database)
+├── Redis (Cache)
+└── Backend (FastAPI - Docker from GHCR)
 
-1. **Terraform**: Install from https://www.terraform.io/downloads
-2. **Railway Account**: Sign up at https://railway.app
-3. **Vercel Account**: Sign up at https://vercel.com
-4. **Anthropic API Key**: Get from https://console.anthropic.com
-
-## Setup
-
-### 1. Get API Tokens
-
-**Railway**:
-- Go to https://railway.app/account/tokens
-- Create a new token
-- Save it securely
-
-**Vercel**:
-- Go to https://vercel.com/account/tokens
-- Create a new token with full access
-- Save it securely
-
-**Anthropic**:
-- Go to https://console.anthropic.com/settings/keys
-- Create a new API key
-- Save it securely
-
-### 2. Create Variables File
-
-```bash
-# Copy the example file
-cp terraform.tfvars.example dev.tfvars
-
-# Edit with your values
-nano dev.tfvars
+Vercel
+└── Frontend (React + Vite - CLI deployment)
 ```
 
-Fill in the required values:
-```hcl
-railway_api_token = "your-railway-token"
-vercel_api_token  = "your-vercel-token"
-anthropic_api_key = "your-anthropic-key"
-postgres_password = "generate-secure-password"
-jwt_secret        = "generate-with-openssl-rand-base64-32"
-```
+## Quick Start
 
-### 3. Initialize Terraform
+1. **Copy the template**:
+   ```bash
+   cp dev.tfvars.example dev.tfvars
+   ```
 
-```bash
-terraform init
-```
+2. **Edit `dev.tfvars`** with your API tokens:
+   - Railway token: https://railway.app/account/tokens
+   - Vercel token: https://vercel.com/account/tokens
+   - Anthropic API key: https://console.anthropic.com/
 
-This downloads the required providers (Railway and Vercel).
+3. **Initialize Terraform**:
+   ```bash
+   terraform init
+   ```
 
-### 4. Plan Infrastructure
+4. **Review the plan**:
+   ```bash
+   terraform plan -var-file=dev.tfvars
+   ```
 
-```bash
-terraform plan -var-file=dev.tfvars
-```
+5. **Deploy**:
+   ```bash
+   terraform apply -var-file=dev.tfvars
+   ```
 
-Review the planned changes to ensure everything looks correct.
+6. **Get outputs** (needed for GitHub secrets):
+   ```bash
+   # Get Vercel Project ID for GitHub secrets
+   terraform output vercel_project_id
 
-### 5. Apply Infrastructure
+   # Get all deployment info
+   terraform output deployment_info
+   ```
 
-```bash
-terraform apply -var-file=dev.tfvars
-```
+7. **Set up GitHub secrets** (see below)
 
-Type `yes` when prompted to create the infrastructure.
+8. **Push to main** to trigger automated deployment
 
-## What Gets Created
+## What Gets Deployed?
 
-### Railway Project
-
-1. **PostgreSQL Service**: Database for storing jobs, users, matches
-2. **Redis Service**: Cache for LLM results and session data
-3. **Backend Service**: FastAPI application connected to GitHub
+### Railway Services
+- **PostgreSQL**: Database for application data
+- **Redis**: Cache for sessions and API responses
+- **Backend**: FastAPI application (Docker container from GHCR)
 
 ### Vercel Project
+- **Frontend**: React + Vite application
+- Configured for deployment via Vercel CLI (no GitHub integration needed)
 
-1. **Frontend Project**: React application deployed from GitHub
-2. **Environment Variables**: Configured with backend URL
-3. **Custom Domain**: Using Vercel's auto-generated domain
+## GitHub Secrets Setup
 
-## After Deployment
+After running `terraform apply`, configure these secrets in your GitHub repository:
 
-### View Outputs
+**Settings → Secrets and variables → Actions → New repository secret**
+
+| Secret Name | Value Source | Description |
+|------------|-------------|-------------|
+| `RAILWAY_TOKEN` | Railway dashboard tokens page | For Railway deployments |
+| `VERCEL_TOKEN` | Vercel account tokens page | For Vercel deployments |
+| `VERCEL_ORG_ID` | Vercel account settings | Your user/team ID |
+| `VERCEL_PROJECT_ID` | `terraform output vercel_project_id` | Project created by Terraform |
+
+## How CI/CD Works
+
+### Backend Workflow (`.github/workflows/backend-deploy.yml`)
+
+Triggers on push to `main` with changes in `backend/`:
+
+1. Builds Docker image from `backend/Dockerfile`
+2. Pushes to GitHub Container Registry (GHCR)
+3. Deploys to Railway using the Docker image
+
+**No GitHub OAuth required!** Railway pulls from public GHCR.
+
+### Frontend Workflow (`.github/workflows/frontend-deploy.yml`)
+
+Triggers on push to `main` with changes in `frontend/`:
+
+1. Installs dependencies
+2. Builds the app
+3. Deploys via Vercel CLI
+
+**No GitHub OAuth required!** Vercel CLI handles deployment.
+
+## Environment Variables
+
+All environment variables are automatically configured by Terraform:
+
+### Backend (Railway)
+- `DATABASE_URL` - PostgreSQL connection
+- `REDIS_URL` - Redis connection
+- `ANTHROPIC_API_KEY` - Anthropic API key
+- `JWT_SECRET` - JWT signing secret
+- `ENVIRONMENT` - dev/prod
+- `LOG_LEVEL` - DEBUG/INFO
+
+### Frontend (Vercel)
+- `VITE_API_URL` - Backend API URL (auto-set from Railway domain)
+
+## Files
+
+- `main.tf` - Main infrastructure configuration
+- `variables.tf` - Input variable definitions
+- `outputs.tf` - Output values (URLs, IDs, etc.)
+- `providers.tf` - Provider configuration (Railway, Vercel)
+- `dev.tfvars` - Your configuration values (gitignored)
+- `dev.tfvars.example` - Template for configuration
+
+## Auto-Generated Secrets
+
+If you don't provide values for these, Terraform will generate them:
+- `postgres_password` - Random 32-character password
+- `jwt_secret` - Random 44-character secret
+
+**Important**: After first apply, extract and save these values:
 
 ```bash
-terraform output
+terraform output generated_postgres_password
+terraform output generated_jwt_secret
 ```
 
-### Get Environment Variables
+Then add them to your `dev.tfvars` to persist across destroys.
 
-```bash
-terraform output -raw env_file_content > .env.production
-```
+## Updating Infrastructure
 
-### View Deployment Info
+After making changes to `.tf` files:
 
-```bash
-terraform output deployment_info
-```
-
-## Railway Configuration
-
-The backend service is configured to:
-- Auto-deploy from `main` branch
-- Use `/backend` as root directory
-- Include all required environment variables
-- Connect to PostgreSQL and Redis via Railway's internal network
-
-## Vercel Configuration
-
-The frontend is configured to:
-- Auto-deploy from `main` branch
-- Use `/frontend` as root directory
-- Build with `yarn build`
-- Use `dist` as output directory
-
-## Managing Infrastructure
-
-### Update Infrastructure
-
-Make changes to `.tf` files, then:
 ```bash
 terraform plan -var-file=dev.tfvars
 terraform apply -var-file=dev.tfvars
 ```
 
-### Destroy Infrastructure
+## Destroying Infrastructure
+
+To tear down everything:
 
 ```bash
 terraform destroy -var-file=dev.tfvars
 ```
 
-**Warning**: This will delete all resources including databases!
-
-### View State
-
+**Warning**: This deletes all data! Export your database first:
 ```bash
-terraform show
+railway run pg_dump $DATABASE_URL > backup.sql
 ```
 
-## Environments
+## Multiple Environments
 
-### Development
+To deploy separate dev/staging/prod environments:
 
-```bash
-terraform workspace new dev
-terraform apply -var-file=dev.tfvars
-```
+1. Create environment-specific tfvars:
+   ```bash
+   cp dev.tfvars.example staging.tfvars
+   cp dev.tfvars.example prod.tfvars
+   ```
 
-### Production
+2. Use Terraform workspaces:
+   ```bash
+   terraform workspace new staging
+   terraform apply -var-file=staging.tfvars
 
-```bash
-terraform workspace new prod
-terraform apply -var-file=prod.tfvars
-```
+   terraform workspace new prod
+   terraform apply -var-file=prod.tfvars
+   ```
 
 ## Troubleshooting
 
-### Railway Service Not Deploying
+### "Error: No valid credential sources found"
+→ Set API tokens in your `dev.tfvars` file
 
-1. Check GitHub repository is connected
-2. Verify `/backend` directory has a `Dockerfile` or Railway will auto-detect Python
-3. Check Railway dashboard for build logs
+### "Error: resource already exists"
+→ Change `project_name` or `environment` in tfvars
 
-### Vercel Build Failing
+### Railway service fails to start
+1. Check Railway dashboard for logs
+2. Ensure Docker image exists in GHCR and is public
+3. Verify GitHub Actions workflow completed successfully
 
-1. Verify `/frontend` directory structure
-2. Check `package.json` has correct build script
-3. Review Vercel dashboard for build logs
+### Vercel deployment fails
+1. Check GitHub Actions logs
+2. Verify `VERCEL_PROJECT_ID` secret is correct
+3. Ensure Vercel project was created by Terraform
 
-### Database Connection Issues
+### GitHub Actions workflow not triggering
+1. Check workflow file syntax (`.github/workflows/*.yml`)
+2. Verify GitHub secrets are set correctly
+3. Check Actions tab for errors
 
-1. Verify PostgreSQL service is running in Railway
-2. Check environment variables are set correctly
-3. Ensure using Railway's internal network URLs (`.railway.internal`)
+### Docker image not found
+1. Make backend package public in GHCR:
+   - Go to https://github.com/denisenanni?tab=packages
+   - Click `career-agent/backend`
+   - Settings → Change visibility → Public
+
+## State Management
+
+Currently using local state. For teams/production, use remote state:
+
+```hcl
+terraform {
+  backend "s3" {
+    bucket = "your-terraform-state-bucket"
+    key    = "career-agent/terraform.tfstate"
+    region = "us-east-1"
+  }
+}
+```
+
+Or use Terraform Cloud for free remote state.
 
 ## Cost Estimate
 
-- **Railway**: $5/month credit (free tier)
-- **Vercel**: Free tier
-- **Anthropic API**: $10-20/month (usage-based)
+- **Railway**: $5/month (Hobby Plan) - includes PostgreSQL, Redis, Backend
+- **Vercel**: $0/month (Free tier) - generous limits
+- **GitHub Actions**: $0/month (free for public repos, 2000 min/month for private)
+- **Anthropic API**: Usage-based
 
-Total: **$10-25/month**
+**Total**: ~$5-15/month
 
-## Security Notes
+## Security Best Practices
 
-- Never commit `*.tfvars` files
-- Store API tokens in secure password manager
-- Rotate secrets regularly
-- Use different secrets for dev/prod
+1. Never commit `*.tfvars` files
+2. Rotate API tokens regularly
+3. Use different secrets for dev/prod
+4. Enable branch protection on main
+5. Review GitHub Actions logs for security issues
+6. Keep dependencies updated
 
-## Next Steps
+## Full Documentation
 
-After infrastructure is deployed:
-
-1. Connect GitHub repository to Railway backend service
-2. Add `Procfile` or `railway.json` to backend if needed
-3. Push code to GitHub to trigger deployments
-4. Monitor deployments in Railway and Vercel dashboards
+See [infrastructure/DEPLOYMENT.md](../DEPLOYMENT.md) for complete deployment guide with troubleshooting, monitoring, and advanced configuration.

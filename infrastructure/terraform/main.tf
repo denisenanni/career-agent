@@ -37,13 +37,9 @@ resource "railway_project" "main" {
 # =============================================================================
 
 resource "railway_service" "postgres" {
-  project_id = railway_project.main.id
-  name       = "postgres"
-
-  # Use Railway's PostgreSQL template
-  source = {
-    image = "postgres:16-alpine"
-  }
+  project_id   = railway_project.main.id
+  name         = "postgres"
+  source_image = "postgres:16-alpine"
 }
 
 # PostgreSQL environment variables
@@ -73,13 +69,9 @@ resource "railway_variable" "postgres_password" {
 # =============================================================================
 
 resource "railway_service" "redis" {
-  project_id = railway_project.main.id
-  name       = "redis"
-
-  # Use Railway's Redis template
-  source = {
-    image = "redis:7-alpine"
-  }
+  project_id   = railway_project.main.id
+  name         = "redis"
+  source_image = "redis:7-alpine"
 }
 
 # =============================================================================
@@ -87,15 +79,9 @@ resource "railway_service" "redis" {
 # =============================================================================
 
 resource "railway_service" "backend" {
-  project_id = railway_project.main.id
-  name       = "backend"
-
-  # Connect to GitHub repository
-  source = {
-    repo           = var.github_repo
-    branch         = var.github_branch
-    root_directory = "/backend"
-  }
+  project_id   = railway_project.main.id
+  name         = "backend"
+  source_image = var.backend_docker_image
 }
 
 # Backend environment variables
@@ -149,12 +135,8 @@ resource "vercel_project" "frontend" {
   name      = local.app_name
   framework = "vite"
 
-  git_repository = {
-    type = "github"
-    repo = var.github_repo
-  }
-
-  root_directory = "frontend"
+  # GitHub Actions handles deployment via Vercel CLI
+  # No git_repository block needed - avoids OAuth requirement
 
   build_command    = "yarn build"
   output_directory = "dist"
@@ -172,4 +154,37 @@ resource "vercel_project_environment_variable" "api_url" {
 resource "vercel_project_domain" "frontend" {
   project_id = vercel_project.frontend.id
   domain     = "${local.app_name}.vercel.app"
+}
+
+# =============================================================================
+# GITHUB ACTIONS SECRETS
+# =============================================================================
+
+# Railway API token for backend deployment
+resource "github_actions_secret" "railway_token" {
+  repository      = split("/", var.github_repo)[1]
+  secret_name     = "RAILWAY_TOKEN"
+  plaintext_value = var.railway_api_token
+}
+
+# Vercel API token for frontend deployment
+resource "github_actions_secret" "vercel_token" {
+  repository      = split("/", var.github_repo)[1]
+  secret_name     = "VERCEL_TOKEN"
+  plaintext_value = var.vercel_api_token
+}
+
+# Vercel Organization ID (optional, for team accounts)
+resource "github_actions_secret" "vercel_org_id" {
+  count           = var.vercel_team_id != null ? 1 : 0
+  repository      = split("/", var.github_repo)[1]
+  secret_name     = "VERCEL_ORG_ID"
+  plaintext_value = var.vercel_team_id
+}
+
+# Vercel Project ID for deployment targeting
+resource "github_actions_secret" "vercel_project_id" {
+  repository      = split("/", var.github_repo)[1]
+  secret_name     = "VERCEL_PROJECT_ID"
+  plaintext_value = vercel_project.frontend.id
 }

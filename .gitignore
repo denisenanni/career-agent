@@ -63,3 +63,9 @@ backend/migrations/versions/__pycache__/
 *.db
 *.sqlite
 *.sqlite3
+# Terraform variable files
+*.tfvars
+!*.tfvars.example
+
+# Terraform outputs
+outputs.tf

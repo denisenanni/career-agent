@@ -14,6 +14,10 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.6"
     }
+    github = {
+      source  = "integrations/github"
+      version = "~> 6.0"
+    }
   }
 }
 
@@ -26,4 +30,10 @@ provider "railway" {
 provider "vercel" {
   api_token = var.vercel_api_token
   team      = var.vercel_team_id
+}
+
+# GitHub - manages Actions secrets and repository configuration
+provider "github" {
+  token = var.github_token
+  owner = split("/", var.github_repo)[0]
 }
