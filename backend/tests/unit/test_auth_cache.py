@@ -143,71 +143,88 @@ class TestAuthDependencyWithCache:
     """Test get_current_user dependency with caching"""
 
     @patch('app.dependencies.auth.decode_access_token')
-    @patch('app.dependencies.auth.get_db')
-    def test_get_current_user_cache_hit(self, mock_get_db, mock_decode, sample_user):
-        """Test that get_current_user uses cache when available"""
+    def test_get_current_user_cache_hit(self, mock_decode, sample_user):
+        """Test that get_current_user uses cache when caching enabled"""
         from app.dependencies.auth import get_current_user
         from fastapi.security import HTTPAuthorizationCredentials
+        from app.config import settings
 
-        # Setup mocks
-        mock_decode.return_value = {"user_id": sample_user.id}
-        mock_db = Mock()
+        # Store original value and enable caching
+        original_rate_limit = settings.rate_limit_enabled
+        settings.rate_limit_enabled = True
 
-        # Pre-cache the user
-        _cache_user(sample_user)
+        try:
+            # Setup mocks
+            mock_decode.return_value = {"user_id": sample_user.id}
+            mock_db = Mock()
 
-        # Call get_current_user
-        credentials = HTTPAuthorizationCredentials(
-            scheme="Bearer",
-            credentials="fake_token"
-        )
+            # Pre-cache the user
+            _cache_user(sample_user)
 
-        result = get_current_user(credentials, mock_db)
+            # Call get_current_user
+            credentials = HTTPAuthorizationCredentials(
+                scheme="Bearer",
+                credentials="fake_token"
+            )
 
-        # Should return the cached user
-        assert result.id == sample_user.id
+            result = get_current_user(credentials, mock_db)
 
-        # Database should NOT be queried
-        mock_db.query.assert_not_called()
+            # Should return the cached user
+            assert result.id == sample_user.id
+
+            # Database should NOT be queried
+            mock_db.query.assert_not_called()
+        finally:
+            # Restore original value
+            settings.rate_limit_enabled = original_rate_limit
 
     @patch('app.dependencies.auth.decode_access_token')
     def test_get_current_user_cache_miss_queries_db(self, mock_decode, sample_user):
         """Test that get_current_user queries DB on cache miss"""
         from app.dependencies.auth import get_current_user
         from fastapi.security import HTTPAuthorizationCredentials
+        from app.config import settings
 
-        # Setup mocks
-        mock_decode.return_value = {"user_id": sample_user.id}
-        mock_db = Mock()
-        mock_query = Mock()
-        mock_filter = Mock()
+        # Store original value and enable caching
+        original_rate_limit = settings.rate_limit_enabled
+        settings.rate_limit_enabled = True
 
-        # Setup query chain
-        mock_db.query.return_value = mock_query
-        mock_query.filter.return_value = mock_filter
-        mock_filter.first.return_value = sample_user
+        try:
+            # Setup mocks
+            mock_decode.return_value = {"user_id": sample_user.id}
+            mock_db = Mock()
+            mock_query = Mock()
+            mock_filter = Mock()
 
-        # Ensure cache is empty
-        invalidate_user_cache(sample_user.id)
+            # Setup query chain
+            mock_db.query.return_value = mock_query
+            mock_query.filter.return_value = mock_filter
+            mock_filter.first.return_value = sample_user
 
-        # Call get_current_user
-        credentials = HTTPAuthorizationCredentials(
-            scheme="Bearer",
-            credentials="fake_token"
-        )
+            # Ensure cache is empty
+            invalidate_user_cache(sample_user.id)
 
-        result = get_current_user(credentials, mock_db)
+            # Call get_current_user
+            credentials = HTTPAuthorizationCredentials(
+                scheme="Bearer",
+                credentials="fake_token"
+            )
 
-        # Should query database
-        mock_db.query.assert_called_once()
+            result = get_current_user(credentials, mock_db)
 
-        # Should return the user
-        assert result.id == sample_user.id
+            # Should query database
+            mock_db.query.assert_called_once()
 
-        # Should now be cached for next request
-        cached_user = _get_cached_user(sample_user.id)
-        assert cached_user is not None
-        assert cached_user.id == sample_user.id
+            # Should return the user
+            assert result.id == sample_user.id
+
+            # Should now be cached for next request
+            cached_user = _get_cached_user(sample_user.id)
+            assert cached_user is not None
+            assert cached_user.id == sample_user.id
+        finally:
+            # Restore original value
+            settings.rate_limit_enabled = original_rate_limit
 
 
 class TestCacheConcurrency:

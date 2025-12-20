@@ -319,3 +319,96 @@ class TestLLMServiceConfiguration:
         # Should have reasonable max_tokens for CV parsing
         assert call_kwargs["max_tokens"] >= 1024
         assert call_kwargs["max_tokens"] <= 4096
+
+
+class TestLLMCaching:
+    """Test caching functionality for LLM service"""
+
+    @patch('app.services.llm.client')
+    def test_cv_parse_cache_hit(self, mock_client):
+        """Test CV parsing returns cached result on cache hit"""
+        cached_data = {
+            "name": "Cached User",
+            "email": "cached@example.com",
+            "skills": ["Python"],
+            "experience": [],
+            "education": [],
+            "years_of_experience": 5
+        }
+
+        with patch('app.services.llm.cache_get', return_value=cached_data):
+            result = parse_cv_with_llm("Sample CV text")
+
+            assert result == cached_data
+            assert result["name"] == "Cached User"
+            # Verify no API call was made
+            mock_client.messages.create.assert_not_called()
+
+    @patch('app.services.llm.client')
+    def test_job_extract_cache_hit(self, mock_client):
+        """Test job extraction returns cached result on cache hit"""
+        cached_data = {
+            "required_skills": ["Python", "Django"],
+            "nice_to_have_skills": ["Docker"],
+            "experience_years_min": 2,
+            "experience_years_max": 4,
+            "remote_type": "hybrid"
+        }
+
+        with patch('app.services.llm.cache_get', return_value=cached_data):
+            result = extract_job_requirements("Developer", "Company", "Description")
+
+            assert result == cached_data
+            assert "Python" in result["required_skills"]
+            # Verify no API call was made
+            mock_client.messages.create.assert_not_called()
+
+    @patch('app.services.llm.client', None)
+    def test_job_extract_no_client(self):
+        """Test job extraction when API client is not configured"""
+        result = extract_job_requirements("Developer", "Company", "Description")
+        assert result is None
+
+    @patch('app.services.llm.cache_get', return_value=None)
+    @patch('app.services.llm.cache_set')
+    @patch('app.services.llm.client')
+    def test_cv_parse_json_prefix(self, mock_client, mock_cache_set, mock_cache_get):
+        """Test CV parsing handles 'json' prefix in response"""
+        json_data = '{"name": "Test", "skills": [], "experience": [], "education": [], "years_of_experience": 0}'
+        # Response with json prefix after code block removal
+        mock_response = Mock(
+            content=[Mock(text=f"json\n{json_data}")]
+        )
+        mock_client.messages.create.return_value = mock_response
+
+        result = parse_cv_with_llm("CV text")
+
+        assert result is not None
+        assert result["name"] == "Test"
+
+    @patch('app.services.llm.cache_get', return_value=None)
+    @patch('app.services.llm.cache_set')
+    @patch('app.services.llm.client')
+    def test_job_extract_json_prefix(self, mock_client, mock_cache_set, mock_cache_get):
+        """Test job extraction handles 'json' prefix in response"""
+        json_data = '{"required_skills": ["Python"], "nice_to_have_skills": [], "remote_type": "full"}'
+        mock_response = Mock(
+            content=[Mock(text=f"json\n{json_data}")]
+        )
+        mock_client.messages.create.return_value = mock_response
+
+        result = extract_job_requirements("Dev", "Co", "Desc")
+
+        assert result is not None
+        assert result["remote_type"] == "full"
+
+    @patch('app.services.llm.cache_get', return_value=None)
+    @patch('app.services.llm.cache_set')
+    @patch('app.services.llm.client')
+    def test_job_extract_api_error(self, mock_client, mock_cache_set, mock_cache_get):
+        """Test job extraction handles API errors gracefully"""
+        mock_client.messages.create.side_effect = Exception("API Error")
+
+        result = extract_job_requirements("Dev", "Co", "Desc")
+
+        assert result is None

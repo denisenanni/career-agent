@@ -3,11 +3,12 @@ Unit tests for Redis cache service
 
 Tests basic cache operations, key builders, and TTL functionality
 """
+import os
 import pytest
 import time
 from app.services.redis_cache import (
     cache_set, cache_get, cache_delete, cache_exists, cache_get_ttl,
-    cache_delete_pattern,
+    cache_delete_pattern, get_redis_client,
     build_cv_parse_key, build_job_extract_key,
     build_cover_letter_key, build_cv_highlights_key,
     build_match_content_pattern,
@@ -15,6 +16,20 @@ from app.services.redis_cache import (
 )
 
 
+# Skip tests that require actual Redis connection
+def redis_available():
+    """Check if Redis is available"""
+    client = get_redis_client()
+    return client is not None
+
+
+requires_redis = pytest.mark.skipif(
+    not redis_available(),
+    reason="Requires Redis (connection not available)"
+)
+
+
+@requires_redis
 class TestRedisCacheBasicOperations:
     """Test basic Redis cache operations"""
 
@@ -81,6 +96,7 @@ class TestRedisCacheBasicOperations:
             cache_delete(key)
 
 
+@requires_redis
 class TestRedisCacheTTL:
     """Test TTL (Time To Live) functionality"""
 
@@ -129,6 +145,7 @@ class TestRedisCacheTTL:
         assert TTL_1_HOUR == 60 * 60
 
 
+@requires_redis
 class TestRedisCachePatternDelete:
     """Test pattern-based deletion"""
 
@@ -200,6 +217,7 @@ class TestCacheKeyBuilders:
         assert pattern == f"*:{user_id}:{job_id}"
 
 
+@requires_redis
 class TestRedisCacheIntegration:
     """Integration tests for realistic cache usage patterns"""
 
@@ -277,6 +295,7 @@ class TestRedisCacheIntegration:
         assert cache_exists(highlights_key) is False
 
 
+@requires_redis
 class TestRedisCacheErrorHandling:
     """Test error handling and edge cases"""
 
@@ -315,3 +334,343 @@ class TestRedisCacheErrorHandling:
         assert retrieved == large_value
 
         cache_delete(key)
+
+
+# ============================================================================
+# Mocked unit tests (don't require real Redis connection)
+# ============================================================================
+from unittest.mock import patch, MagicMock
+from redis.exceptions import RedisError
+from app.services.redis_cache import get_redis_client, TTL_5_MINUTES
+import app.services.redis_cache as redis_cache_module
+
+
+@pytest.fixture
+def reset_redis_client():
+    """Reset the global Redis client before and after test"""
+    original = redis_cache_module._redis_client
+    redis_cache_module._redis_client = None
+    yield
+    redis_cache_module._redis_client = original
+
+
+class TestGetRedisClientMocked:
+    """Test Redis client connection with mocks"""
+
+    def test_get_redis_client_success(self, reset_redis_client):
+        """Test successful Redis connection"""
+        with patch('app.services.redis_cache.redis') as mock_redis:
+            mock_client = MagicMock()
+            mock_redis.from_url.return_value = mock_client
+
+            client = get_redis_client()
+
+            assert client == mock_client
+            mock_client.ping.assert_called_once()
+
+    def test_get_redis_client_returns_cached_client(self, reset_redis_client):
+        """Test that client is reused after first connection"""
+        mock_client = MagicMock()
+        redis_cache_module._redis_client = mock_client
+
+        client = get_redis_client()
+
+        assert client == mock_client
+
+    def test_get_redis_client_redis_error(self, reset_redis_client):
+        """Test Redis connection failure"""
+        with patch('app.services.redis_cache.redis') as mock_redis:
+            mock_redis.from_url.side_effect = RedisError("Connection failed")
+
+            client = get_redis_client()
+
+            assert client is None
+
+    def test_get_redis_client_unexpected_error(self, reset_redis_client):
+        """Test unexpected error during connection"""
+        with patch('app.services.redis_cache.redis') as mock_redis:
+            mock_redis.from_url.side_effect = Exception("Unexpected error")
+
+            client = get_redis_client()
+
+            assert client is None
+
+
+class TestCacheSetMocked:
+    """Test cache_set function with mocks"""
+
+    def test_cache_set_with_ttl(self, reset_redis_client):
+        """Test setting cache with TTL"""
+        mock_client = MagicMock()
+        redis_cache_module._redis_client = mock_client
+
+        result = cache_set("test_key", {"data": "value"}, ttl_seconds=3600)
+
+        assert result is True
+        mock_client.setex.assert_called_once()
+
+    def test_cache_set_without_ttl(self, reset_redis_client):
+        """Test setting cache without TTL"""
+        mock_client = MagicMock()
+        redis_cache_module._redis_client = mock_client
+
+        result = cache_set("test_key", {"data": "value"})
+
+        assert result is True
+        mock_client.set.assert_called_once()
+
+    def test_cache_set_no_redis_client(self, reset_redis_client):
+        """Test cache_set when Redis is unavailable"""
+        with patch('app.services.redis_cache.get_redis_client', return_value=None):
+            result = cache_set("test_key", {"data": "value"})
+
+        assert result is False
+
+    def test_cache_set_redis_error(self, reset_redis_client):
+        """Test cache_set with Redis error"""
+        mock_client = MagicMock()
+        mock_client.set.side_effect = RedisError("Set failed")
+        redis_cache_module._redis_client = mock_client
+
+        result = cache_set("test_key", {"data": "value"})
+
+        assert result is False
+
+    def test_cache_set_serialization_error(self, reset_redis_client):
+        """Test cache_set with non-serializable value"""
+        mock_client = MagicMock()
+        redis_cache_module._redis_client = mock_client
+
+        # Create a non-serializable object
+        class NonSerializable:
+            pass
+
+        result = cache_set("test_key", NonSerializable())
+
+        assert result is False
+
+
+class TestCacheGetMocked:
+    """Test cache_get function with mocks"""
+
+    def test_cache_get_hit(self, reset_redis_client):
+        """Test cache hit"""
+        mock_client = MagicMock()
+        mock_client.get.return_value = '{"data": "value"}'
+        redis_cache_module._redis_client = mock_client
+
+        result = cache_get("test_key")
+
+        assert result == {"data": "value"}
+
+    def test_cache_get_miss(self, reset_redis_client):
+        """Test cache miss"""
+        mock_client = MagicMock()
+        mock_client.get.return_value = None
+        redis_cache_module._redis_client = mock_client
+
+        result = cache_get("test_key")
+
+        assert result is None
+
+    def test_cache_get_no_redis_client(self, reset_redis_client):
+        """Test cache_get when Redis is unavailable"""
+        with patch('app.services.redis_cache.get_redis_client', return_value=None):
+            result = cache_get("test_key")
+
+        assert result is None
+
+    def test_cache_get_redis_error(self, reset_redis_client):
+        """Test cache_get with Redis error"""
+        mock_client = MagicMock()
+        mock_client.get.side_effect = RedisError("Get failed")
+        redis_cache_module._redis_client = mock_client
+
+        result = cache_get("test_key")
+
+        assert result is None
+
+    def test_cache_get_json_decode_error(self, reset_redis_client):
+        """Test cache_get with invalid JSON"""
+        mock_client = MagicMock()
+        mock_client.get.return_value = "invalid json {"
+        redis_cache_module._redis_client = mock_client
+
+        result = cache_get("test_key")
+
+        assert result is None
+
+
+class TestCacheDeleteMocked:
+    """Test cache_delete function with mocks"""
+
+    def test_cache_delete_success(self, reset_redis_client):
+        """Test successful cache deletion"""
+        mock_client = MagicMock()
+        redis_cache_module._redis_client = mock_client
+
+        result = cache_delete("test_key")
+
+        assert result is True
+        mock_client.delete.assert_called_once_with("test_key")
+
+    def test_cache_delete_no_redis_client(self, reset_redis_client):
+        """Test cache_delete when Redis is unavailable"""
+        with patch('app.services.redis_cache.get_redis_client', return_value=None):
+            result = cache_delete("test_key")
+
+        assert result is False
+
+    def test_cache_delete_redis_error(self, reset_redis_client):
+        """Test cache_delete with Redis error"""
+        mock_client = MagicMock()
+        mock_client.delete.side_effect = RedisError("Delete failed")
+        redis_cache_module._redis_client = mock_client
+
+        result = cache_delete("test_key")
+
+        assert result is False
+
+
+class TestCacheDeletePatternMocked:
+    """Test cache_delete_pattern function with mocks"""
+
+    def test_cache_delete_pattern_with_keys(self, reset_redis_client):
+        """Test deleting keys by pattern"""
+        mock_client = MagicMock()
+        mock_client.keys.return_value = ["key1", "key2", "key3"]
+        mock_client.delete.return_value = 3
+        redis_cache_module._redis_client = mock_client
+
+        result = cache_delete_pattern("test:*")
+
+        assert result == 3
+        mock_client.delete.assert_called_once_with("key1", "key2", "key3")
+
+    def test_cache_delete_pattern_no_keys(self, reset_redis_client):
+        """Test deleting pattern with no matching keys"""
+        mock_client = MagicMock()
+        mock_client.keys.return_value = []
+        redis_cache_module._redis_client = mock_client
+
+        result = cache_delete_pattern("test:*")
+
+        assert result == 0
+        mock_client.delete.assert_not_called()
+
+    def test_cache_delete_pattern_no_redis_client(self, reset_redis_client):
+        """Test cache_delete_pattern when Redis is unavailable"""
+        with patch('app.services.redis_cache.get_redis_client', return_value=None):
+            result = cache_delete_pattern("test:*")
+
+        assert result == 0
+
+    def test_cache_delete_pattern_redis_error(self, reset_redis_client):
+        """Test cache_delete_pattern with Redis error"""
+        mock_client = MagicMock()
+        mock_client.keys.side_effect = RedisError("Keys failed")
+        redis_cache_module._redis_client = mock_client
+
+        result = cache_delete_pattern("test:*")
+
+        assert result == 0
+
+
+class TestCacheExistsMocked:
+    """Test cache_exists function with mocks"""
+
+    def test_cache_exists_true(self, reset_redis_client):
+        """Test when key exists"""
+        mock_client = MagicMock()
+        mock_client.exists.return_value = 1
+        redis_cache_module._redis_client = mock_client
+
+        result = cache_exists("test_key")
+
+        assert result is True
+
+    def test_cache_exists_false(self, reset_redis_client):
+        """Test when key doesn't exist"""
+        mock_client = MagicMock()
+        mock_client.exists.return_value = 0
+        redis_cache_module._redis_client = mock_client
+
+        result = cache_exists("test_key")
+
+        assert result is False
+
+    def test_cache_exists_no_redis_client(self, reset_redis_client):
+        """Test cache_exists when Redis is unavailable"""
+        with patch('app.services.redis_cache.get_redis_client', return_value=None):
+            result = cache_exists("test_key")
+
+        assert result is False
+
+    def test_cache_exists_redis_error(self, reset_redis_client):
+        """Test cache_exists with Redis error"""
+        mock_client = MagicMock()
+        mock_client.exists.side_effect = RedisError("Exists failed")
+        redis_cache_module._redis_client = mock_client
+
+        result = cache_exists("test_key")
+
+        assert result is False
+
+
+class TestCacheGetTtlMocked:
+    """Test cache_get_ttl function with mocks"""
+
+    def test_cache_get_ttl_with_ttl(self, reset_redis_client):
+        """Test getting TTL for key with expiration"""
+        mock_client = MagicMock()
+        mock_client.ttl.return_value = 3600
+        redis_cache_module._redis_client = mock_client
+
+        result = cache_get_ttl("test_key")
+
+        assert result == 3600
+
+    def test_cache_get_ttl_no_expiration(self, reset_redis_client):
+        """Test getting TTL for key without expiration"""
+        mock_client = MagicMock()
+        mock_client.ttl.return_value = -1
+        redis_cache_module._redis_client = mock_client
+
+        result = cache_get_ttl("test_key")
+
+        assert result == -1
+
+    def test_cache_get_ttl_key_not_exists(self, reset_redis_client):
+        """Test getting TTL for non-existent key"""
+        mock_client = MagicMock()
+        mock_client.ttl.return_value = -2
+        redis_cache_module._redis_client = mock_client
+
+        result = cache_get_ttl("test_key")
+
+        assert result == -2
+
+    def test_cache_get_ttl_no_redis_client(self, reset_redis_client):
+        """Test cache_get_ttl when Redis is unavailable"""
+        with patch('app.services.redis_cache.get_redis_client', return_value=None):
+            result = cache_get_ttl("test_key")
+
+        assert result is None
+
+    def test_cache_get_ttl_redis_error(self, reset_redis_client):
+        """Test cache_get_ttl with Redis error"""
+        mock_client = MagicMock()
+        mock_client.ttl.side_effect = RedisError("TTL failed")
+        redis_cache_module._redis_client = mock_client
+
+        result = cache_get_ttl("test_key")
+
+        assert result is None
+
+
+class TestTtlConstantsMocked:
+    """Test TTL constant values"""
+
+    def test_ttl_5_minutes(self):
+        """Test 5 minutes TTL value"""
+        assert TTL_5_MINUTES == 60 * 5
