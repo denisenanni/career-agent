@@ -34,6 +34,26 @@ export interface JobFilters {
   offset?: number
 }
 
+// Router location state for redirects after auth
+export interface LocationState {
+  from?: {
+    pathname: string
+  }
+}
+
+// User preferences types
+export interface UserPreferences {
+  // Job search preferences
+  min_salary?: number
+  job_types?: string[]
+  remote_types?: string[]
+  preferred_countries?: string[]
+  eligible_regions?: string[]
+  needs_visa_sponsorship?: boolean
+  // Parsed CV data (set by backend after CV upload)
+  parsed_cv?: ParsedCV
+}
+
 // Auth types
 export interface User {
   id: number
@@ -42,7 +62,7 @@ export interface User {
   bio: string | null
   skills: string[]
   experience_years: number | null
-  preferences: Record<string, any>
+  preferences: UserPreferences
   cv_filename: string | null
   cv_uploaded_at: string | null
   created_at: string
@@ -70,7 +90,7 @@ export interface ProfileUpdate {
   bio?: string
   skills?: string[]
   experience_years?: number
-  preferences?: Record<string, any>
+  preferences?: UserPreferences
 }
 
 export interface CVUploadResponse {

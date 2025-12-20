@@ -178,8 +178,8 @@ Return JSON only:"""
         logger.error(f"LLM response: {content}")
         raise ValueError(f"Failed to parse job text: Invalid JSON response from AI")
     except Exception as e:
-        logger.error(f"Error parsing job with LLM: {e}")
-        raise ValueError(f"Failed to parse job text: {str(e)}")
+        logger.error(f"Error parsing job with LLM: {e}", exc_info=True)
+        raise ValueError("Failed to parse job text. Please try again.")
 
 
 @router.post("/parse", response_model=UserJobCreate)

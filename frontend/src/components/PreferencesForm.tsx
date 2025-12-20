@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Settings, CheckCircle, AlertCircle } from 'lucide-react'
 import { updateProfile } from '../api/profile'
 import { useAuth } from '../contexts/AuthContext'
+import type { UserPreferences } from '../types'
 
 export function PreferencesForm() {
   const { user, refreshUser } = useAuth()
@@ -76,7 +77,7 @@ export function PreferencesForm() {
 
     try {
       // Build preferences object
-      const preferences: Record<string, any> = {}
+      const preferences: UserPreferences = {}
 
       if (minSalary !== '') preferences.min_salary = Number(minSalary)
       if (jobTypes.length > 0) preferences.job_types = jobTypes

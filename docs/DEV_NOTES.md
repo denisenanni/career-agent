@@ -400,7 +400,7 @@ See current technical debt tracked in ROADMAP.md.
   | HIGH     | Replace datetime.utcnow() with datetime.now(timezone.utc) | Low    | done
   | MEDIUM   | Add token blacklist or reduce expiry                      | Medium | done
   | MEDIUM   | Add rate limiting to expensive endpoints                  | Low    | done
-  | MEDIUM   | Fix generic exception message leak                        | Low    |
-  | LOW      | Fix N+1 query in matches list                             | Low    |
-  | LOW      | Define proper TypeScript types                            | Low    |
+  | MEDIUM   | Fix generic exception message leak                        | Low    | done
+  | LOW      | Fix N+1 query in matches list                             | Low    | done
+  | LOW      | Define proper TypeScript types                            | Low    | done
 

@@ -1,12 +1,15 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from contextlib import asynccontextmanager
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+import logging
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 from app.routers import jobs, profile, matches, health, auth, insights, skills, admin, user_jobs
 
 
@@ -34,6 +37,23 @@ app = FastAPI(
 # Add rate limit handler
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+# Global exception handler to prevent internal error message leakage
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """
+    Catch-all exception handler to prevent internal error details from leaking to clients.
+    Logs the full error server-side while returning a generic message to the client.
+    """
+    logger.error(
+        f"Unhandled exception on {request.method} {request.url.path}: {exc}",
+        exc_info=True
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An internal server error occurred. Please try again later."}
+    )
 
 # CORS - parse origins from settings (supports multiple origins for production)
 allowed_origins = [origin.strip() for origin in settings.cors_origins.split(",")]

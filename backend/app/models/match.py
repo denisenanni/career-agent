@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text, Float, ForeignKey, JSON
+from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.models import Base
 
@@ -11,6 +12,9 @@ class Match(Base):
     # Foreign keys
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, index=True)
+
+    # Relationships
+    job = relationship("Job", lazy="select")
 
     # Match score (0-100)
     score = Column(Float, nullable=False, index=True)

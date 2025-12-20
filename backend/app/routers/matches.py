@@ -2,7 +2,7 @@
 Matches router - job matching and application generation
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from typing import Optional, List
 from pydantic import BaseModel
@@ -104,8 +104,8 @@ async def list_matches(
     if limit > 100:
         limit = 100
 
-    # Build query
-    query = db.query(Match).filter(Match.user_id == current_user.id)
+    # Build query with eager loading to avoid N+1 queries
+    query = db.query(Match).options(joinedload(Match.job)).filter(Match.user_id == current_user.id)
 
     # Apply filters
     if min_score is not None:
@@ -117,17 +117,22 @@ async def list_matches(
     if status:
         query = query.filter(Match.status == status)
 
-    # Get total count
-    total = query.count()
+    # Get total count (without eager loading for efficiency)
+    total = db.query(Match).filter(Match.user_id == current_user.id).filter(
+        Match.score >= min_score if min_score is not None else True
+    ).filter(
+        Match.score <= max_score if max_score is not None else True
+    ).filter(
+        Match.status == status if status else True
+    ).count()
 
     # Get paginated results, ordered by score
     matches = query.order_by(Match.score.desc()).limit(limit).offset(offset).all()
 
-    # Enrich with job details
+    # Build response using eagerly loaded job relationship
     match_responses = []
     for match in matches:
-        job = db.query(Job).filter(Job.id == match.job_id).first()
-        if job:
+        if match.job:
             match_responses.append(MatchResponse(
                 id=match.id,
                 job_id=match.job_id,
@@ -136,13 +141,13 @@ async def list_matches(
                 reasoning=match.reasoning or {},
                 analysis=match.analysis or "",
                 created_at=match.created_at.isoformat(),
-                job_title=job.title,
-                job_company=job.company,
-                job_url=job.url,
-                job_location=job.location or "Remote",
-                job_remote_type=job.remote_type or "full",
-                job_salary_min=job.salary_min,
-                job_salary_max=job.salary_max,
+                job_title=match.job.title,
+                job_company=match.job.company,
+                job_url=match.job.url,
+                job_location=match.job.location or "Remote",
+                job_remote_type=match.job.remote_type or "full",
+                job_salary_min=match.job.salary_min,
+                job_salary_max=match.job.salary_max,
             ))
 
     return MatchListResponse(

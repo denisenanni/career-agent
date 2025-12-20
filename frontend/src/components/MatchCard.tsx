@@ -1,6 +1,6 @@
 import { memo, useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import type { Match } from '../types'
+import type { Match, MatchesResponse } from '../types'
 import { updateMatchStatus } from '../api/matches'
 import { ApplicationMaterialsModal } from './ApplicationMaterialsModal'
 
@@ -48,14 +48,14 @@ export const MatchCard = memo(function MatchCard({ match }: MatchCardProps) {
       const previousMatches = queryClient.getQueriesData({ queryKey: ['matches'] })
 
       // Optimistically update all match queries
-      queryClient.setQueriesData<any>(
+      queryClient.setQueriesData<MatchesResponse>(
         { queryKey: ['matches'] },
-        (old: any) => {
+        (old: MatchesResponse | undefined) => {
           if (!old?.matches) return old
 
           return {
             ...old,
-            matches: old.matches.map((m: any) =>
+            matches: old.matches.map((m: Match) =>
               m.id === match.id ? { ...m, status: newStatus } : m
             ),
           }

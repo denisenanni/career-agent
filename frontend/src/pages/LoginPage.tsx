@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { LogIn } from 'lucide-react'
+import type { LocationState } from '../types'
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -16,7 +17,7 @@ export function LoginPage() {
   const [emailError, setEmailError] = useState('')
 
   // Get the page user tried to access, or default to /profile
-  const from = (location.state as any)?.from?.pathname || '/profile'
+  const from = (location.state as LocationState)?.from?.pathname || '/profile'
 
   // Validate email
   const validateEmail = (value: string) => {

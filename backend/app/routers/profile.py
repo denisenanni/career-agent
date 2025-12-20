@@ -192,9 +192,10 @@ async def upload_cv(
             detail=str(e)
         )
     except Exception as e:
+        logger.error(f"Failed to process CV for user {current_user.id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process CV: {str(e)}"
+            detail="Failed to process CV. Please try again or contact support."
         )
 
 
