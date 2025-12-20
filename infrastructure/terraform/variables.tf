@@ -73,6 +73,12 @@ variable "jwt_secret" {
   default     = null
 }
 
+variable "allowed_emails" {
+  description = "Comma-separated list of allowed email addresses for registration"
+  type        = string
+  default     = ""
+}
+
 # =============================================================================
 # DOCKER IMAGES
 # =============================================================================

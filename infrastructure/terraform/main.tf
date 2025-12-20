@@ -44,24 +44,24 @@ resource "railway_service" "postgres" {
 
 # PostgreSQL environment variables
 resource "railway_variable" "postgres_db" {
-  project_id = railway_project.main.id
-  service_id = railway_service.postgres.id
-  name       = "POSTGRES_DB"
-  value      = "career_agent"
+  environment_id = railway_project.main.default_environment.id
+  service_id     = railway_service.postgres.id
+  name           = "POSTGRES_DB"
+  value          = "career_agent"
 }
 
 resource "railway_variable" "postgres_user" {
-  project_id = railway_project.main.id
-  service_id = railway_service.postgres.id
-  name       = "POSTGRES_USER"
-  value      = "career_agent"
+  environment_id = railway_project.main.default_environment.id
+  service_id     = railway_service.postgres.id
+  name           = "POSTGRES_USER"
+  value          = "career_agent"
 }
 
 resource "railway_variable" "postgres_password" {
-  project_id = railway_project.main.id
-  service_id = railway_service.postgres.id
-  name       = "POSTGRES_PASSWORD"
-  value      = local.postgres_password
+  environment_id = railway_project.main.default_environment.id
+  service_id     = railway_service.postgres.id
+  name           = "POSTGRES_PASSWORD"
+  value          = local.postgres_password
 }
 
 # =============================================================================
@@ -84,47 +84,75 @@ resource "railway_service" "backend" {
   source_image = var.backend_docker_image
 }
 
+# Backend public domain
+resource "railway_service_domain" "backend" {
+  environment_id = railway_project.main.default_environment.id
+  service_id     = railway_service.backend.id
+  subdomain      = "${local.app_name}-api"
+}
+
 # Backend environment variables
 resource "railway_variable" "backend_database_url" {
-  project_id = railway_project.main.id
-  service_id = railway_service.backend.id
-  name       = "DATABASE_URL"
-  value      = "postgresql://${var.postgres_user}:${local.postgres_password}@${railway_service.postgres.name}.railway.internal:5432/${var.postgres_db}"
+  environment_id = railway_project.main.default_environment.id
+  service_id     = railway_service.backend.id
+  name           = "DATABASE_URL"
+  value          = "postgresql://${var.postgres_user}:${local.postgres_password}@${railway_service.postgres.name}.railway.internal:5432/${var.postgres_db}"
 }
 
 resource "railway_variable" "backend_redis_url" {
-  project_id = railway_project.main.id
-  service_id = railway_service.backend.id
-  name       = "REDIS_URL"
-  value      = "redis://${railway_service.redis.name}.railway.internal:6379"
+  environment_id = railway_project.main.default_environment.id
+  service_id     = railway_service.backend.id
+  name           = "REDIS_URL"
+  value          = "redis://${railway_service.redis.name}.railway.internal:6379"
 }
 
 resource "railway_variable" "backend_anthropic_key" {
-  project_id = railway_project.main.id
-  service_id = railway_service.backend.id
-  name       = "ANTHROPIC_API_KEY"
-  value      = var.anthropic_api_key
+  environment_id = railway_project.main.default_environment.id
+  service_id     = railway_service.backend.id
+  name           = "ANTHROPIC_API_KEY"
+  value          = var.anthropic_api_key
 }
 
 resource "railway_variable" "backend_jwt_secret" {
-  project_id = railway_project.main.id
-  service_id = railway_service.backend.id
-  name       = "JWT_SECRET"
-  value      = local.jwt_secret
+  environment_id = railway_project.main.default_environment.id
+  service_id     = railway_service.backend.id
+  name           = "JWT_SECRET"
+  value          = local.jwt_secret
 }
 
 resource "railway_variable" "backend_environment" {
-  project_id = railway_project.main.id
-  service_id = railway_service.backend.id
-  name       = "ENVIRONMENT"
-  value      = var.environment
+  environment_id = railway_project.main.default_environment.id
+  service_id     = railway_service.backend.id
+  name           = "ENVIRONMENT"
+  value          = var.environment
 }
 
 resource "railway_variable" "backend_log_level" {
-  project_id = railway_project.main.id
-  service_id = railway_service.backend.id
-  name       = "LOG_LEVEL"
-  value      = var.environment == "production" ? "INFO" : "DEBUG"
+  environment_id = railway_project.main.default_environment.id
+  service_id     = railway_service.backend.id
+  name           = "LOG_LEVEL"
+  value          = var.environment == "production" ? "INFO" : "DEBUG"
+}
+
+resource "railway_variable" "backend_cors_origins" {
+  environment_id = railway_project.main.default_environment.id
+  service_id     = railway_service.backend.id
+  name           = "CORS_ORIGINS"
+  value          = "https://${vercel_project_domain.frontend.domain}"
+}
+
+resource "railway_variable" "backend_registration_mode" {
+  environment_id = railway_project.main.default_environment.id
+  service_id     = railway_service.backend.id
+  name           = "REGISTRATION_MODE"
+  value          = "allowlist"
+}
+
+resource "railway_variable" "backend_allowed_emails" {
+  environment_id = railway_project.main.default_environment.id
+  service_id     = railway_service.backend.id
+  name           = "ALLOWED_EMAILS"
+  value          = var.allowed_emails
 }
 
 # =============================================================================
@@ -146,7 +174,7 @@ resource "vercel_project" "frontend" {
 resource "vercel_project_environment_variable" "api_url" {
   project_id = vercel_project.frontend.id
   key        = "VITE_API_URL"
-  value      = railway_service.backend.domain
+  value      = "https://${railway_service_domain.backend.domain}"
   target     = ["production", "preview"]
 }
 
@@ -176,10 +204,9 @@ resource "github_actions_secret" "vercel_token" {
 
 # Vercel Organization ID (optional, for team accounts)
 resource "github_actions_secret" "vercel_org_id" {
-  count           = var.vercel_team_id != null ? 1 : 0
   repository      = split("/", var.github_repo)[1]
   secret_name     = "VERCEL_ORG_ID"
-  plaintext_value = var.vercel_team_id
+  plaintext_value = var.vercel_team_id != null ? var.vercel_team_id : ""
 }
 
 # Vercel Project ID for deployment targeting
