@@ -44,11 +44,17 @@ export function useAutoSave<T>({
   const isSavingRef = useRef(false)
   // Track if we need to save again after current save completes
   const pendingSaveRef = useRef(false)
+  // Track the onSave callback to avoid effect re-runs when it changes
+  const onSaveRef = useRef(onSave)
 
-  // Update dataRef when data changes
+  // Update refs when values change
   useEffect(() => {
     dataRef.current = data
   }, [data])
+
+  useEffect(() => {
+    onSaveRef.current = onSave
+  }, [onSave])
 
   // Serialize data for comparison (avoids triggering saves on reference-only changes)
   const dataString = JSON.stringify(data)
@@ -64,7 +70,7 @@ export function useAutoSave<T>({
     setError(null)
 
     try {
-      await onSave(dataRef.current)
+      await onSaveRef.current(dataRef.current)
       setStatus('saved')
 
       // Reset to idle after showing "saved" for a moment
@@ -83,7 +89,7 @@ export function useAutoSave<T>({
         performSave()
       }
     }
-  }, [onSave])
+  }, [])
 
   // Debounced save on data change (uses deep comparison)
   useEffect(() => {
