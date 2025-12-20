@@ -56,6 +56,12 @@ variable "vercel_team_id" {
   default     = null
 }
 
+variable "vercel_org_id" {
+  description = "Vercel organization ID (for team accounts)"
+  type        = string
+  default     = ""
+}
+
 # =============================================================================
 # APPLICATION
 # =============================================================================

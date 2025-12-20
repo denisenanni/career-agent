@@ -200,11 +200,11 @@ resource "github_actions_secret" "vercel_token" {
   plaintext_value = var.vercel_api_token
 }
 
-# Vercel Organization ID (optional, for team accounts)
+# Vercel Organization ID (for team accounts)
 resource "github_actions_secret" "vercel_org_id" {
   repository      = split("/", var.github_repo)[1]
   secret_name     = "VERCEL_ORG_ID"
-  plaintext_value = var.vercel_team_id != null ? var.vercel_team_id : ""
+  plaintext_value = var.vercel_org_id
 }
 
 # Vercel Project ID for deployment targeting

@@ -62,8 +62,8 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          # Link to Railway project and service
-          railway link --project ${{ secrets.RAILWAY_PROJECT_ID }} --environment production
+          # Link to Railway project
+          railway link ${{ secrets.RAILWAY_PROJECT_ID }}
 
-          # Trigger redeploy - Railway will pull the latest :latest tag from GHCR
-          railway service --name backend redeploy
+          # Deploy the service
+          railway up --service backend --detach
