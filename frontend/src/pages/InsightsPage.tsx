@@ -71,13 +71,10 @@ export function InsightsPage() {
         <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-md">
           <p className="font-medium">Error loading insights</p>
           <p className="text-sm">
-            {error instanceof Error ? error.message : 'Unknown error'}
+            {error instanceof Error && error.message.includes('skills')
+              ? 'Please add skills to your profile first by going to the Profile page.'
+              : error instanceof Error ? error.message : 'Unknown error'}
           </p>
-          {error instanceof Error && error.message.includes('skills') && (
-            <p className="text-sm mt-2">
-              Please add skills to your profile first by going to the Profile page.
-            </p>
-          )}
         </div>
       )}
 
