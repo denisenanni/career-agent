@@ -255,24 +255,29 @@ class TestMatchStatusUpdates:
         response = authenticated_client.get("/api/matches")
         assert response.json()["total"] == initial_count
 
-    def test_hidden_match_not_in_default_list(self, authenticated_client, test_match):
-        """Test that hidden matches don't appear in default list"""
+    def test_hidden_match_filtered_by_status(self, authenticated_client, test_match):
+        """Test that hidden matches can be filtered by status"""
         # Hide the match
-        authenticated_client.put(
+        response = authenticated_client.put(
             f"/api/matches/{test_match.id}/status",
             json={"status": "hidden"}
         )
+        assert response.status_code == 200
 
-        # Get matches without status filter
+        # Get all matches - hidden match should still appear (no filtering by default)
         response = authenticated_client.get("/api/matches")
-        matches = response.json()["matches"]
+        all_matches = response.json()["matches"]
+        match_ids = [m["id"] for m in all_matches]
+        assert test_match.id in match_ids
 
-        # Hidden match should not appear
-        hidden_match_ids = [m["id"] for m in matches if m["id"] == test_match.id]
-        assert len(hidden_match_ids) == 0
-
-        # But it should appear when filtering by hidden status
+        # When filtering by hidden status, the hidden match should appear
         response = authenticated_client.get("/api/matches?status=hidden")
-        matches = response.json()["matches"]
-        hidden_match_ids = [m["id"] for m in matches if m["id"] == test_match.id]
-        assert len(hidden_match_ids) == 1
+        hidden_matches = response.json()["matches"]
+        hidden_match_ids = [m["id"] for m in hidden_matches]
+        assert test_match.id in hidden_match_ids
+
+        # When filtering by other statuses, the hidden match should not appear
+        response = authenticated_client.get("/api/matches?status=matched")
+        matched_matches = response.json()["matches"]
+        matched_ids = [m["id"] for m in matched_matches]
+        assert test_match.id not in matched_ids

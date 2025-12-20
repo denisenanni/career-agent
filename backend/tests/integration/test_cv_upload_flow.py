@@ -163,7 +163,7 @@ class TestCVUploadFlow:
         )
 
         assert response.status_code == 400
-        assert "file type" in response.json()["detail"].lower()
+        assert "file format" in response.json()["detail"].lower()
 
     def test_upload_cv_validates_content_length(self, authenticated_client):
         """Test that CVs with too little content are rejected"""

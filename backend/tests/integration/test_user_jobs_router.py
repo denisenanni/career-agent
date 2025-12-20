@@ -2,34 +2,18 @@
 Integration tests for User Jobs Router - User-submitted job postings
 """
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from unittest.mock import Mock, patch
 
 from app.main import app
 from app.database import get_db
+from app.dependencies.auth import get_current_user
 from app.models.user_job import UserJob
-
-
-@pytest.fixture
-def client(db_session: Session):
-    """FastAPI test client with database override"""
-    def override_get_db():
-        try:
-            yield db_session
-        finally:
-            pass
-
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as test_client:
-        yield test_client
-    app.dependency_overrides.clear()
 
 
 @pytest.fixture
 def authenticated_client(client, test_user):
     """Client with authentication token (bypasses rate limiting in tests)"""
-    from app.dependencies.auth import get_current_user
 
     # Override get_current_user to bypass auth and rate limiting
     def override_get_current_user():

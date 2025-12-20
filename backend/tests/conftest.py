@@ -3,7 +3,11 @@ Pytest configuration and fixtures for all tests
 """
 import pytest
 import os
-from sqlalchemy import create_engine, text
+
+# Disable rate limiting FIRST before any app imports
+os.environ["RATE_LIMIT_ENABLED"] = "false"
+
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 
@@ -13,9 +17,6 @@ from app.models.scrape_log import ScrapeLog
 from app.models.user import User
 from app.utils.auth import get_password_hash
 
-# Disable rate limiting for all tests
-os.environ["RATE_LIMIT_ENABLED"] = "false"
-
 
 @pytest.fixture(scope="function")
 def db_session() -> Session:
@@ -23,8 +24,8 @@ def db_session() -> Session:
     Create a fresh test database for each test with transaction-based isolation.
     Uses the TEST_DATABASE_URL environment variable if set, otherwise uses in-memory SQLite.
 
-    Each test runs in a transaction that is rolled back after the test completes,
-    ensuring complete isolation between tests.
+    Each test runs in a nested transaction (SAVEPOINT) that is rolled back after the test
+    completes, ensuring complete isolation between tests even when tests call commit().
 
     Note: Integration tests require PostgreSQL. Set TEST_DATABASE_URL to use real database.
     """
@@ -45,14 +46,30 @@ def db_session() -> Session:
         TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=connection)
         session = TestingSessionLocal()
 
+        # Begin a nested transaction (SAVEPOINT)
+        # This allows tests to call commit() without affecting the outer transaction
+        session.begin_nested()
+
+        # Patch commit to use the savepoint
+        @event.listens_for(session, "after_transaction_end")
+        def restart_savepoint(session, transaction):
+            if transaction.nested and not transaction._parent.nested:
+                # Restart the savepoint after commit
+                session.begin_nested()
+
         try:
             yield session
         finally:
+            # Remove all objects from session to avoid detached instance errors
+            session.expunge_all()
+
             # Close session
             session.close()
 
-            # Rollback the transaction - this undoes ALL changes made during the test
-            transaction.rollback()
+            # Rollback the outer transaction - this undoes ALL changes made during the test
+            # Only rollback if transaction is still active
+            if transaction.is_active:
+                transaction.rollback()
 
             # Close connection
             connection.close()
@@ -74,12 +91,30 @@ def db_session() -> Session:
         TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=connection)
         session = TestingSessionLocal()
 
+        # Begin a nested transaction (SAVEPOINT)
+        session.begin_nested()
+
+        @event.listens_for(session, "after_transaction_end")
+        def restart_savepoint_sqlite(session, transaction):
+            if transaction.nested and not transaction._parent.nested:
+                session.begin_nested()
+
         try:
             yield session
         finally:
+            # Remove all objects from session to avoid detached instance errors
+            session.expunge_all()
+
+            # Close session
             session.close()
-            transaction.rollback()
+
+            # Rollback transaction only if still active
+            if transaction.is_active:
+                transaction.rollback()
+
+            # Close connection
             connection.close()
+
             # Clean up for SQLite
             Base.metadata.drop_all(bind=engine)
 
@@ -149,7 +184,20 @@ def sample_user_data():
 
 @pytest.fixture
 def test_user(db_session: Session):
-    """Create a test user in the database"""
+    """Create a test user in the database (non-admin)"""
+    # Ensure admin user exists first (id=1) so test_user gets id > 1
+    # This is needed for admin permission tests
+    admin_exists = db_session.query(User).filter(User.id == 1).first()
+    if not admin_exists:
+        admin = User(
+            id=1,
+            email="admin@example.com",
+            hashed_password=get_password_hash("adminpass123")
+        )
+        db_session.add(admin)
+        db_session.commit()
+
+    # Now create the test user (will get id > 1)
     user = User(
         email="test@example.com",
         hashed_password=get_password_hash("testpassword123")
@@ -204,6 +252,12 @@ def client(db_session: Session):
     """FastAPI test client with database override"""
     from fastapi.testclient import TestClient
     from app.database import get_db
+    from app.main import app
+    import app.dependencies.auth as auth_module
+
+    # Clear user cache before test to avoid stale data
+    # Access the module's cache directly to ensure we're clearing the right one
+    auth_module._user_cache.clear()
 
     def override_get_db():
         try:
@@ -211,11 +265,16 @@ def client(db_session: Session):
         finally:
             pass
 
-    from app.main import app
+    # Clear any existing overrides before setting new ones
+    app.dependency_overrides.clear()
     app.dependency_overrides[get_db] = override_get_db
+
     with TestClient(app) as test_client:
         yield test_client
+
+    # Clean up
     app.dependency_overrides.clear()
+    auth_module._user_cache.clear()
 
 
 @pytest.fixture

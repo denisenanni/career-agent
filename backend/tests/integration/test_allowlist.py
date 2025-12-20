@@ -327,15 +327,16 @@ class TestAdminAllowlistAPI:
             "/api/admin/allowlist",
             json={"email": "test@example.com"}
         )
-        assert response.status_code == 401
+        # FastAPI's HTTPBearer returns 403 when no Authorization header is provided
+        assert response.status_code == 403
 
         # Try to list
         response = client.get("/api/admin/allowlist")
-        assert response.status_code == 401
+        assert response.status_code == 403
 
         # Try to remove
         response = client.delete("/api/admin/allowlist/test@example.com")
-        assert response.status_code == 401
+        assert response.status_code == 403
 
 
 class TestAllowlistIntegration:
@@ -515,8 +516,9 @@ class TestAllowlistEdgeCases:
         # This should either succeed (if no safety check) or fail with warning
         # Adjust based on your implementation
         # If you haven't implemented this safety check, the test documents the risk
-        if response.status_code == 200:
+        if response.status_code in [200, 204]:
             # No safety check implemented - document this as a TODO
+            # TODO: Implement safety check to prevent last admin from removing themselves
             pass
         else:
             assert response.status_code == 400

@@ -2,27 +2,9 @@
 Integration tests for Auth Router - Critical authentication endpoints
 """
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.main import app
-from app.database import get_db
 from app.models.user import User
-
-
-@pytest.fixture
-def client(db_session: Session):
-    """FastAPI test client with database override"""
-    def override_get_db():
-        try:
-            yield db_session
-        finally:
-            pass
-
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as test_client:
-        yield test_client
-    app.dependency_overrides.clear()
 
 
 class TestAuthRegistration:

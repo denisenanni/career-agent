@@ -90,17 +90,22 @@ def get_current_user(
         raise credentials_exception
 
     # Try to get user from cache first (reduces DB load)
-    user = _get_cached_user(user_id)
+    # Skip caching in test environment to avoid stale data between tests
+    from app.config import settings
+    user = None
+    if settings.rate_limit_enabled:  # rate_limit_enabled is false in tests
+        user = _get_cached_user(user_id)
 
     if user is None:
-        # Cache miss - get from database
+        # Cache miss or caching disabled - get from database
         user = db.query(User).filter(User.id == user_id).first()
 
         if user is None:
             raise credentials_exception
 
-        # Cache the user for future requests
-        _cache_user(user)
+        # Cache the user for future requests (if caching is enabled)
+        if settings.rate_limit_enabled:
+            _cache_user(user)
 
     if not user.is_active:
         raise HTTPException(

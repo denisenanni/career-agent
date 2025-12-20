@@ -2,28 +2,20 @@
 Integration tests for Jobs Router
 """
 import pytest
-from fastapi.testclient import TestClient
+import os
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
+from unittest.mock import patch
 
 from app.main import app
 from app.models.job import Job
 from app.database import get_db
 
-
-@pytest.fixture
-def client(db_session: Session):
-    """FastAPI test client with database dependency override"""
-    def override_get_db():
-        try:
-            yield db_session
-        finally:
-            pass
-
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as test_client:
-        yield test_client
-    app.dependency_overrides.clear()
+# Skip PostgreSQL-specific tests if using SQLite
+requires_postgresql = pytest.mark.skipif(
+    not os.getenv("TEST_DATABASE_URL"),
+    reason="Requires PostgreSQL (full-text search not supported in SQLite)"
+)
 
 
 @pytest.fixture
@@ -155,6 +147,7 @@ class TestListJobs:
         for job in data["jobs"]:
             assert job["salary_min"] >= 110000
 
+    @requires_postgresql
     def test_search_in_title(self, client, sample_jobs):
         """Test searching in job title"""
         response = client.get("/api/jobs?search=Python")
@@ -165,6 +158,7 @@ class TestListJobs:
         assert data["total"] == 1
         assert "Python" in data["jobs"][0]["title"]
 
+    @requires_postgresql
     def test_search_in_company(self, client, sample_jobs):
         """Test searching in company name"""
         response = client.get("/api/jobs?search=TechCorp")
@@ -175,6 +169,7 @@ class TestListJobs:
         assert data["total"] == 1
         assert data["jobs"][0]["company"] == "TechCorp"
 
+    @requires_postgresql
     def test_search_in_description(self, client, sample_jobs):
         """Test searching in job description"""
         response = client.get("/api/jobs?search=infrastructure")
@@ -185,6 +180,7 @@ class TestListJobs:
         assert data["total"] == 1
         assert "infrastructure" in data["jobs"][0]["description"].lower()
 
+    @requires_postgresql
     def test_search_escapes_sql_wildcards(self, client, sample_jobs):
         """Test that SQL wildcards in search are escaped"""
         response = client.get("/api/jobs?search=%_malicious")
@@ -208,6 +204,7 @@ class TestListJobs:
             assert job["remote_type"] == "full"
             assert job["salary_min"] >= 100000
 
+    @requires_postgresql
     def test_description_is_truncated(self, client, sample_jobs):
         """Test that long descriptions are truncated in list view"""
         # Create a job with very long description
@@ -252,6 +249,7 @@ class TestListJobs:
         response = client.get("/api/jobs?offset=-1")
         assert response.status_code == 422
 
+    @requires_postgresql
     def test_empty_results(self, client):
         """Test response when no jobs match filters"""
         response = client.get("/api/jobs?search=nonexistent")
@@ -340,9 +338,10 @@ class TestGetJob:
 class TestRefreshJobs:
     """Test POST /api/jobs/refresh endpoint"""
 
-    def test_refresh_jobs_queues_background_task(self, client):
-        """Test that refresh endpoint queues a background task"""
-        response = client.post("/api/jobs/refresh")
+    @patch('app.routers.jobs.run_scraper')
+    def test_refresh_jobs_queues_background_task(self, mock_run_scraper, authenticated_client):
+        """Test that refresh endpoint queues a background task (requires auth)"""
+        response = authenticated_client.post("/api/jobs/refresh")
 
         assert response.status_code == 200
         data = response.json()

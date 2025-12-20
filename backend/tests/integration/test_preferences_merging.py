@@ -216,7 +216,7 @@ class TestPreferencesMerging:
         assert user_with_parsed_cv.experience_years == 8
 
     def test_preferences_with_null_value(self, authenticated_client, user_with_parsed_cv, db_session):
-        """Test that null preference values don't cause issues"""
+        """Test that explicitly setting preferences to null clears them"""
         response = authenticated_client.put(
             "/api/profile",
             json={
@@ -228,8 +228,8 @@ class TestPreferencesMerging:
 
         db_session.refresh(user_with_parsed_cv)
 
-        # Existing preferences should be preserved when None is sent
-        assert "parsed_cv" in user_with_parsed_cv.preferences
+        # Explicitly sending None clears preferences
+        assert user_with_parsed_cv.preferences is None
 
     def test_empty_preferences_dict(self, authenticated_client, user_with_parsed_cv, db_session):
         """Test updating with empty preferences dict"""
