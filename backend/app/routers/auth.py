@@ -106,7 +106,7 @@ async def login(
     """
     Login with email and password
 
-    Returns a JWT access token that expires in 7 days.
+    Returns a JWT access token that expires in 24 hours.
 
     - **email**: User email
     - **password**: User password

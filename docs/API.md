@@ -88,7 +88,7 @@ Authenticate and receive JWT token.
 - `422 Unprocessable Entity` - Missing required fields
 
 **Notes:**
-- Token expires in 7 days (604800 seconds)
+- Token expires in 24 hours
 - Include token in subsequent requests: `Authorization: Bearer <token>`
 
 ---

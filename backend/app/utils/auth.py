@@ -10,7 +10,7 @@ from app.config import settings
 # JWT settings
 SECRET_KEY = settings.jwt_secret
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -51,7 +51,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
     Args:
         data: Data to encode in the token
-        expires_delta: Token expiration time (default: 7 days)
+        expires_delta: Token expiration time (default: 24 hours)
 
     Returns:
         Encoded JWT token string

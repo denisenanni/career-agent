@@ -266,7 +266,7 @@ REDIS_URL=redis://localhost:6379
 # Authentication
 JWT_SECRET=your-secret-key-here
 JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=10080  # 7 days
+ACCESS_TOKEN_EXPIRE_MINUTES=1440  # 24 hours
 
 # External APIs
 ANTHROPIC_API_KEY=sk-ant-...

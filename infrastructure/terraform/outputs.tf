@@ -113,7 +113,7 @@ output "env_file_content" {
     # Auth
     JWT_SECRET=${local.jwt_secret}
     JWT_ALGORITHM=HS256
-    JWT_EXPIRE_MINUTES=10080
+    JWT_EXPIRE_MINUTES=1440
   EOT
 }
 
