@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Query, Depends, HTTPException, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, over, text
 from typing import Optional
@@ -6,6 +6,8 @@ from enum import Enum
 import os
 import sys
 import logging
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.database import get_db
 from app.models.job import Job
@@ -13,9 +15,11 @@ from app.models.scrape_log import ScrapeLog
 from app.models.user import User
 from app.schemas.job import JobsResponse, JobDetail, JobListItem, ScrapeLogResponse
 from app.dependencies.auth import get_current_user
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address, enabled=settings.rate_limit_enabled)
 
 
 class JobType(str, Enum):
@@ -178,7 +182,9 @@ async def run_scraper():
 
 
 @router.post("/refresh")
+@limiter.limit("2/hour")  # Expensive operation - web scraping
 async def refresh_jobs(
+    request: Request,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user)
 ):
@@ -188,7 +194,7 @@ async def refresh_jobs(
     Requires authentication. Only authenticated users can trigger job scraping.
     """
     try:
-        logger.info(f"Job scraping triggered by user {current_user.id} ({current_user.email})")
+        logger.info(f"Job scraping triggered by user {current_user.id}")
         background_tasks.add_task(run_scraper)
         return {
             "status": "queued",

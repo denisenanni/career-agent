@@ -396,10 +396,10 @@ See current technical debt tracked in ROADMAP.md.
 
   | Priority | Issue                                                     | Effort |
   |----------|-----------------------------------------------------------|--------|
-  | HIGH     | Implement proper admin RBAC                               | Medium |
-  | HIGH     | Replace datetime.utcnow() with datetime.now(timezone.utc) | Low    |
-  | MEDIUM   | Add token blacklist or reduce expiry                      | Medium |
-  | MEDIUM   | Add rate limiting to expensive endpoints                  | Low    |
+  | HIGH     | Implement proper admin RBAC                               | Medium | done
+  | HIGH     | Replace datetime.utcnow() with datetime.now(timezone.utc) | Low    | done
+  | MEDIUM   | Add token blacklist or reduce expiry                      | Medium | done
+  | MEDIUM   | Add rate limiting to expensive endpoints                  | Low    | done
   | MEDIUM   | Fix generic exception message leak                        | Low    |
   | LOW      | Fix N+1 query in matches list                             | Low    |
   | LOW      | Define proper TypeScript types                            | Low    |

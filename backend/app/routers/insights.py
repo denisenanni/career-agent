@@ -1,20 +1,24 @@
 """
 Insights router - career insights and skill analysis
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import logging
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.database import get_db
 from app.models import User, SkillAnalysis
 from app.dependencies.auth import get_current_user
 from app.services.insights import run_skill_analysis_for_user
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address, enabled=settings.rate_limit_enabled)
 
 
 # Pydantic schemas
@@ -100,7 +104,9 @@ async def get_skill_insights(
 
 
 @router.post("/skills/refresh", response_model=SkillAnalysisResponse)
+@limiter.limit("5/hour")  # Expensive operation - analyzes all jobs
 async def refresh_skill_insights(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

@@ -1,12 +1,14 @@
 """
 Matches router - job matching and application generation
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional, List
 from pydantic import BaseModel
 import logging
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.database import get_db
 from app.models import User, Match, Job
@@ -14,10 +16,12 @@ from app.dependencies.auth import get_current_user
 from app.services.matching import match_user_with_all_jobs
 from app.services.generation import generate_cover_letter, generate_cv_highlights
 from app.services.redis_cache import cache_delete_pattern, build_match_content_pattern
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address, enabled=settings.rate_limit_enabled)
 
 
 # Pydantic schemas
@@ -150,7 +154,9 @@ async def list_matches(
 
 
 @router.post("/refresh", response_model=RefreshMatchesResponse)
+@limiter.limit("5/hour")  # Expensive operation - LLM calls for all jobs
 async def refresh_matches(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -275,7 +281,9 @@ async def update_match_status(
 
 
 @router.post("/{match_id}/generate-cover-letter", response_model=CoverLetterResponse)
+@limiter.limit("20/hour")  # LLM call (Sonnet) - cached after first generation
 async def generate_match_cover_letter(
+    request: Request,
     match_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -321,7 +329,9 @@ async def generate_match_cover_letter(
 
 
 @router.post("/{match_id}/generate-highlights", response_model=CVHighlightsResponse)
+@limiter.limit("20/hour")  # LLM call (Haiku) - cached after first generation
 async def generate_match_highlights(
+    request: Request,
     match_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
