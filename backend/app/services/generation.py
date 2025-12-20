@@ -3,6 +3,12 @@ Application materials generation service using Claude
 
 Generates personalized cover letters and CV highlights with Redis caching
 to minimize API costs and provide instant responses for cached content.
+
+IMPROVEMENTS:
+- Strategic prompt engineering to prevent self-sabotage
+- Concrete examples and specificity enforcement
+- Better handling of skill gaps (emphasize strengths, not weaknesses)
+- Professional positioning without dishonesty
 """
 from typing import Optional, Dict, Any, List
 import json
@@ -24,6 +30,265 @@ logger = logging.getLogger(__name__)
 # Initialize Anthropic client
 client = Anthropic(api_key=settings.anthropic_api_key) if settings.anthropic_api_key else None
 
+
+# ============================================================================
+# IMPROVED PROMPT TEMPLATES
+# ============================================================================
+
+def build_cover_letter_prompt(
+    name: str,
+    skills: str,
+    years_exp: int,
+    summary: str,
+    experience_text: str,
+    job_title: str,
+    company_name: str,
+    required_skills: str,
+    job_description_excerpt: str,
+    matching_skills: str,
+    num_matches: int,
+    match_score: float,
+    skill_gaps: List[str] = None
+) -> str:
+    """
+    Build improved cover letter prompt with strategic positioning
+    
+    Key improvements:
+    - Prevents self-sabotaging language
+    - Enforces concrete examples
+    - Strategic gap handling
+    - Clear DO/DON'T guidelines
+    """
+    
+    skill_gaps = skill_gaps or []
+    
+    # Build skill gaps section (for context only, not to mention in letter)
+    skill_gaps_section = ""
+    if skill_gaps and len(skill_gaps) > 0:
+        gaps_list = ', '.join(skill_gaps[:5])
+        skill_gaps_section = f"\nSkills Not Currently Listed ({len(skill_gaps)}): {gaps_list}"
+    
+    # Build strategic guidance for handling gaps
+    if not skill_gaps:
+        skill_gap_strategy = "No significant skill gaps identified. Focus entirely on demonstrating matching skills with concrete examples."
+    else:
+        skill_gap_strategy = f"""The candidate has {len(skill_gaps)} skills not currently listed in their profile.
+
+**Strategy for gaps:**
+1. DO NOT mention specific gaps in the cover letter
+2. Instead, emphasize the {num_matches} matching skills with detailed examples
+3. If a missing skill has a close equivalent the candidate possesses, highlight that equivalent
+4. Demonstrate adaptability through past examples of learning new technologies quickly
+5. Focus on transferable skills and relevant experience
+
+**What this means in practice:**
+- If job requires PostgreSQL but candidate has MySQL/SQL Server → Emphasize database design, query optimization, and SQL expertise
+- If job requires specific framework but candidate has similar → Emphasize architectural understanding and ability to work with modern frameworks
+- If job requires technology candidate used 2+ years ago → Present it as experience, not as something outdated
+
+**Never write:**
+"While I haven't worked extensively with [missing skill]..."
+
+**Instead write:**
+"My experience with [related skill] includes [specific example]..."
+"""
+
+    prompt = f"""You are an expert career advisor writing a compelling cover letter for a job application.
+
+=== CANDIDATE PROFILE ===
+Name: {name}
+Current Skills: {skills}
+Years of Experience: {years_exp}
+Professional Summary: {summary}
+
+Relevant Experience:{experience_text}
+
+=== TARGET POSITION ===
+Position: {job_title}
+Company: {company_name}
+Required Skills: {required_skills}
+Job Description (excerpt): {job_description_excerpt}
+
+=== MATCH ANALYSIS ===
+Matching Skills ({num_matches}): {matching_skills}
+Match Score: {match_score:.0f}%{skill_gaps_section}
+
+=== CORE WRITING PRINCIPLES ===
+
+**Strategic Honesty:**
+- Only claim skills and experience the candidate actually possesses
+- Frame existing experience in the most relevant light
+- DO NOT volunteer gaps or weaknesses unless specifically asked
+- If a required skill is missing, emphasize closely related transferable skills instead
+- Never use phrases like "I'm learning" or "I'm expanding into" for core job requirements
+
+**Positioning Strategy:**
+- Lead with strongest matches to job requirements
+- Use specific examples with concrete technologies and outcomes
+- Quantify impact when possible (team size, scale, metrics)
+- Show genuine understanding of the company/role (reference specific details when available)
+
+**What NOT to say:**
+- ❌ "I haven't worked extensively with [required skill]"
+- ❌ "I'm recently expanding into [core requirement]"
+- ❌ "I lack experience in [specific area]"
+- ❌ "I'm eager to learn [required skill]" (for fundamental requirements)
+- ❌ Generic phrases: "various projects", "worked with", "experience in" without specifics
+
+**What TO say:**
+- ✅ "Built [specific thing] using [technology], resulting in [outcome]"
+- ✅ "At [Company], [specific achievement with metrics]"
+- ✅ "Demonstrated expertise in [transferable skill] through [concrete example]"
+- ✅ "[Years] of production experience with [technology stack]"
+
+=== STRUCTURE & FORMAT ===
+
+**Opening (2-3 sentences):**
+- Hook with specific insight about company/role (not generic praise)
+- State the position clearly
+- Brief, confident value proposition
+
+**Body Paragraph 1 (4-5 sentences):**
+- Address the top 2-3 technical requirements with CONCRETE examples
+- Name specific technologies, projects, or outcomes
+- Include at least one quantifiable result
+- Focus on MATCHING skills from the analysis
+
+**Body Paragraph 2 (3-4 sentences):**
+- Address cultural fit, work style, or unique value propositions
+- Connect candidate's approach to company needs
+- Show understanding of role context (being first engineer, remote work, etc.)
+- Can mention transferable skills if relevant
+
+**Closing (2-3 sentences):**
+- Express genuine (but not desperate) enthusiasm
+- Clear next step
+- Professional sign-off
+
+**Hard Constraints:**
+- Maximum 400 words total
+- Start with "Dear Hiring Manager,"
+- End with "Best regards," and name
+- First person perspective
+- Modern format (no address/date)
+- Professional but conversational tone
+- NO bullet points in the letter body
+
+=== HANDLING SKILL GAPS ===
+
+{skill_gap_strategy}
+
+=== OUTPUT ===
+Write the cover letter following all the principles and structure above. Be specific, confident, and genuine.
+
+Cover letter:"""
+
+    return prompt
+
+
+def build_cv_highlights_prompt(
+    experience_text: str,
+    skills_list: str,
+    job_title: str,
+    company_name: str,
+    required_skills: str,
+    job_description_excerpt: str,
+    matching_skills: str,
+    match_score: float
+) -> str:
+    """
+    Build improved CV highlights prompt with specificity enforcement
+    
+    Key improvements:
+    - Bullet point formula enforcement
+    - Good vs bad examples
+    - Strategic positioning guidance
+    - Banned vague language
+    """
+    
+    prompt = f"""You are an expert at extracting and tailoring CV highlights for job applications.
+
+=== CANDIDATE EXPERIENCE ===
+{experience_text}
+
+=== CANDIDATE SKILLS ===
+{skills_list}
+
+=== TARGET POSITION ===
+Title: {job_title}
+Company: {company_name}
+Required Skills: {required_skills}
+Description: {job_description_excerpt}
+
+=== MATCH CONTEXT ===
+Top Matching Skills: {matching_skills}
+Match Score: {match_score:.0f}%
+
+=== EXTRACTION PRINCIPLES ===
+
+**Selection Criteria:**
+- Choose 4-6 experiences MOST relevant to this specific job
+- Prioritize recent experience over old (unless old is extremely relevant)
+- Emphasize experiences that demonstrate required skills
+- Include diversity of relevant skills (don't repeat the same skill 4 times)
+
+**Bullet Point Formula:**
+Each bullet MUST follow: [Action Verb] + [Specific Technology/Skill] + [Concrete Context/Outcome]
+
+Examples of GOOD bullets:
+✅ "Developed full-stack web applications using TypeScript, React, and Node.js, building scalable frontend architectures with complex state management and REST APIs"
+✅ "Led migration of 50+ components from JavaScript to TypeScript, reducing runtime errors by 40% and improving developer velocity"
+✅ "Implemented CI/CD pipelines using GitLab, Terraform, and Docker, automating deployments across 5 microservices"
+
+Examples of BAD bullets:
+❌ "Worked on various web development projects" (too vague)
+❌ "Experience with React and TypeScript" (just listing, no action or outcome)
+❌ "Helped team with DevOps tasks" (no specificity)
+❌ "Familiar with modern JavaScript frameworks" (weak claim)
+
+**Strategic Positioning:**
+- If candidate has limited experience with a required skill, emphasize:
+  - Related skills used in production
+  - Transferable expertise
+  - Similar technologies mastered
+- DO NOT mention "learning", "gaining experience", or "transitioning into"
+- Focus on what candidate HAS done, not what they're trying to do
+
+**Specificity Requirements:**
+- Name exact technologies (not "various tools" or "modern frameworks")
+- Include scale/metrics when possible (user count, team size, performance gains)
+- Use concrete verbs: Built, Developed, Implemented, Led, Architected, Designed, Deployed
+- Avoid weak verbs: Worked on, Helped with, Assisted, Familiar with
+
+**Relevance Matching:**
+- Each bullet should clearly map to at least one job requirement
+- Use language/terminology from the job description
+- Highlight matching skills identified in the analysis
+- Order bullets by relevance (most relevant first)
+
+=== OUTPUT FORMAT ===
+
+Return a JSON array of 4-6 bullet points following the formula above.
+
+Requirements:
+- Each bullet is 1-2 sentences maximum
+- Present tense for current role, past tense for previous roles
+- Specific technologies and outcomes in every bullet
+- Direct relevance to job requirements
+- No generic statements
+
+Return ONLY the JSON array, nothing else.
+
+Format: ["bullet 1", "bullet 2", "bullet 3", "bullet 4", ...]
+
+JSON array:"""
+
+    return prompt
+
+
+# ============================================================================
+# MAIN GENERATION FUNCTIONS
+# ============================================================================
 
 def generate_cover_letter(
     user: User,
@@ -81,7 +346,6 @@ def generate_cover_letter(
             experience_text += f"\n   {exp.get('description')}"
 
     # Prepare job data
-    # Note: match.reasoning contains structured analysis, match.analysis is just text
     reasoning = match.reasoning or {}
     required_skills = reasoning.get("job_requirements", {}).get("required_skills", [])
     job_description_excerpt = job.description[:500] if job.description else ""
@@ -91,39 +355,22 @@ def generate_cover_letter(
     skill_gaps = reasoning.get("missing_skills", [])
     match_score = match.score or 0
 
-    # Build the prompt
-    prompt = f"""Write a professional cover letter for this job application. Be genuine and personable while remaining professional.
-
-CANDIDATE INFORMATION:
-Name: {name}
-Current Skills: {skills}
-Years of Experience: {years_exp}
-Professional Summary: {summary}
-
-Relevant Experience:{experience_text}
-
-JOB DETAILS:
-Position: {job.title}
-Company: {job.company}
-Required Skills: {', '.join(required_skills[:10])}
-Job Description (excerpt): {job_description_excerpt}
-
-MATCH ANALYSIS:
-Matching Skills ({len(skill_matches)}): {', '.join(skill_matches[:10])}
-Skill Gaps ({len(skill_gaps)}): {', '.join(skill_gaps[:5])}
-Match Score: {match_score:.0f}%
-
-INSTRUCTIONS:
-1. Keep it under 400 words
-2. Address why the candidate is a strong fit (emphasize matching skills)
-3. Briefly acknowledge skill gaps and show willingness to learn if relevant
-4. Express genuine interest in the company and role
-5. Professional but not overly formal tone
-6. Do not include address or date (modern format)
-7. Start with "Dear Hiring Manager," and end with "Best regards,"
-8. Write in first person from the candidate's perspective
-
-Write the cover letter:"""
+    # Build the improved prompt
+    prompt = build_cover_letter_prompt(
+        name=name,
+        skills=skills,
+        years_exp=years_exp,
+        summary=summary,
+        experience_text=experience_text,
+        job_title=job.title,
+        company_name=job.company,
+        required_skills=', '.join(required_skills[:10]),
+        job_description_excerpt=job_description_excerpt,
+        matching_skills=', '.join(skill_matches[:10]),
+        num_matches=len(skill_matches),
+        match_score=match_score,
+        skill_gaps=skill_gaps[:5]  # Pass gaps for context, but prompt won't mention them
+    )
 
     try:
         # Use Claude Sonnet for high-quality generation
@@ -216,36 +463,23 @@ def generate_cv_highlights(
             experience_text += f"\n   {exp.get('description')}"
 
     # Prepare job data
-    # Note: match.reasoning contains structured analysis, match.analysis is just text
     reasoning = match.reasoning or {}
     required_skills = reasoning.get("job_requirements", {}).get("required_skills", [])
+    skill_matches = reasoning.get("matching_skills", [])
     job_description_excerpt = job.description[:500] if job.description else ""
+    match_score = match.score or 0
 
-    # Build the prompt
-    prompt = f"""Extract and optimize the 3-5 most relevant experience bullet points from this candidate's CV for the target job.
-
-CANDIDATE EXPERIENCE:{experience_text}
-
-CANDIDATE SKILLS:
-{', '.join(skills)}
-
-TARGET JOB:
-Title: {job.title}
-Required Skills: {', '.join(required_skills)}
-Description: {job_description_excerpt}
-
-INSTRUCTIONS:
-Return a JSON array of 3-5 bullet points that:
-1. Highlight experiences directly relevant to the job requirements
-2. Emphasize matching skills
-3. Use strong action verbs (Led, Developed, Implemented, Managed, etc.)
-4. Include metrics/results where available
-5. Tailor language to match job description keywords
-6. Each bullet should be 1-2 sentences maximum
-
-Format: ["bullet point 1", "bullet point 2", ...]
-
-Return ONLY the JSON array, no other text."""
+    # Build the improved prompt
+    prompt = build_cv_highlights_prompt(
+        experience_text=experience_text,
+        skills_list=', '.join(skills),
+        job_title=job.title,
+        company_name=job.company,
+        required_skills=', '.join(required_skills),
+        job_description_excerpt=job_description_excerpt,
+        matching_skills=', '.join(skill_matches[:10]),
+        match_score=match_score
+    )
 
     try:
         # Use Claude Haiku for cost-effective extraction

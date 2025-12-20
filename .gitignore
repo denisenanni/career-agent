@@ -13,7 +13,9 @@ yarn-error.log*
 ./frontend/.env
 
 # Python
-./backend/.venv
+.venv  
+backend/.venv/  
+**/.venv/ 
 venv/
 env/
 __pycache__/
