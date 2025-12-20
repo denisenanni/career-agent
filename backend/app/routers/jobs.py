@@ -3,8 +3,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, over, text
 from typing import Optional
 from enum import Enum
-import os
-import sys
 import logging
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -162,16 +160,7 @@ async def run_scraper():
     try:
         logger.info("Starting background scraper task")
 
-        # Get the scraping directory path relative to this file
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        backend_dir = os.path.dirname(os.path.dirname(current_dir))
-        scraping_dir = os.path.join(os.path.dirname(backend_dir), "scraping")
-
-        # Add scraping directory to path
-        if scraping_dir not in sys.path:
-            sys.path.insert(0, scraping_dir)
-
-        from scrapers.remoteok import scrape_and_save
+        from app.scrapers.remoteok import scrape_and_save
 
         stats = await scrape_and_save()
         logger.info(f"Scraper completed: {stats}")
