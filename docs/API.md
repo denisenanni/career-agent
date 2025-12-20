@@ -19,6 +19,7 @@ Complete API reference for the Career Agent backend.
 - [Generation](#generation)
 - [Insights](#insights)
 - [Skills](#skills)
+- [Admin](#admin)
 - [Health](#health)
 
 ---
@@ -1035,6 +1036,189 @@ Add a user-contributed skill (not in job market data).
 
 **Errors:**
 - `422 Unprocessable Entity` - Skill name empty or too long
+
+---
+
+## Admin
+
+Admin endpoints require authentication as an admin user (currently user with id=1).
+
+### Get Cache Statistics
+
+Get Redis cache statistics and cost savings.
+
+**Endpoint:** `GET /api/admin/cache/stats`
+**Authentication:** Required (Admin only)
+
+**Response:** `200 OK`
+```json
+{
+  "available": true,
+  "summary": {
+    "total_hits": 1250,
+    "total_misses": 150,
+    "total_requests": 1400,
+    "hit_rate_percent": 89.3,
+    "total_savings_usd": 187.50
+  },
+  "breakdown": {
+    "cover_letter": {
+      "hits": 800,
+      "misses": 50,
+      "total_requests": 850,
+      "hit_rate_percent": 94.1,
+      "cost_per_miss_usd": 0.15,
+      "savings_usd": 120.00
+    },
+    "cv_highlights": {
+      "hits": 200,
+      "misses": 30,
+      "total_requests": 230,
+      "hit_rate_percent": 87.0,
+      "cost_per_miss_usd": 0.01,
+      "savings_usd": 2.00
+    },
+    "cv_parse": {
+      "hits": 150,
+      "misses": 40,
+      "total_requests": 190,
+      "hit_rate_percent": 78.9,
+      "cost_per_miss_usd": 0.01,
+      "savings_usd": 1.50
+    },
+    "job_extract": {
+      "hits": 100,
+      "misses": 30,
+      "total_requests": 130,
+      "hit_rate_percent": 76.9,
+      "cost_per_miss_usd": 0.005,
+      "savings_usd": 0.50
+    }
+  },
+  "storage": {
+    "memory_used": "12.5M",
+    "key_counts": {
+      "cover_letters": 850,
+      "cv_highlights": 230,
+      "cv_parses": 190,
+      "job_extracts": 500
+    },
+    "total_keys": 1770
+  }
+}
+```
+
+**Errors:**
+- `401 Unauthorized` - Not authenticated
+- `403 Forbidden` - Not an admin user
+- `503 Service Unavailable` - Redis not available
+
+**Notes:**
+- Tracks metrics by category (cover_letter, cv_highlights, cv_parse, job_extract)
+- Cost savings calculated based on estimated LLM API costs per operation
+- Memory usage shows actual Redis memory consumption
+
+---
+
+### Reset Cache Metrics
+
+Reset cache hit/miss counters (does NOT clear cached data).
+
+**Endpoint:** `POST /api/admin/cache/reset-metrics`
+**Authentication:** Required (Admin only)
+
+**Response:** `200 OK`
+```json
+{
+  "message": "Cache metrics reset successfully"
+}
+```
+
+**Errors:**
+- `401 Unauthorized` - Not authenticated
+- `403 Forbidden` - Not an admin user
+- `503 Service Unavailable` - Redis not available
+
+**Notes:**
+- Only resets metric counters (hits, misses, sets)
+- Does NOT clear cached cover letters, CV parses, etc.
+- Useful for starting fresh metrics tracking
+
+---
+
+### Add Email to Allowlist
+
+Add an email to the registration allowlist (when REGISTRATION_MODE=allowlist).
+
+**Endpoint:** `POST /api/admin/allowlist`
+**Authentication:** Required (Admin only)
+
+**Request Body:**
+```json
+{
+  "email": "newuser@example.com"
+}
+```
+
+**Response:** `201 Created`
+```json
+{
+  "id": 1,
+  "email": "newuser@example.com",
+  "added_by": 1,
+  "created_at": "2024-12-18T12:00:00Z"
+}
+```
+
+**Errors:**
+- `400 Bad Request` - Email already on allowlist
+- `403 Forbidden` - Not an admin user
+- `422 Unprocessable Entity` - Invalid email format
+
+---
+
+### List Allowed Emails
+
+Get all emails on the registration allowlist.
+
+**Endpoint:** `GET /api/admin/allowlist`
+**Authentication:** Required (Admin only)
+
+**Response:** `200 OK`
+```json
+{
+  "allowed_emails": [
+    {
+      "id": 1,
+      "email": "user1@example.com",
+      "added_by": 1,
+      "created_at": "2024-12-18T10:00:00Z"
+    },
+    {
+      "id": 2,
+      "email": "user2@example.com",
+      "added_by": 1,
+      "created_at": "2024-12-18T11:00:00Z"
+    }
+  ],
+  "total": 2
+}
+```
+
+---
+
+### Remove Email from Allowlist
+
+Remove an email from the registration allowlist.
+
+**Endpoint:** `DELETE /api/admin/allowlist/{email}`
+**Authentication:** Required (Admin only)
+
+**Response:** `204 No Content`
+
+**Errors:**
+- `403 Forbidden` - Not an admin user
+- `404 Not Found` - Email not on allowlist
 
 ---
 

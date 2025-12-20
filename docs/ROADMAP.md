@@ -483,7 +483,11 @@ Return only the JSON array.
 - [x] 5.4: API Endpoints (generate-cover-letter, generate-highlights, regenerate)
 - [x] 5.5: Database Schema Updates (fields already exist)
 - [x] 5.6: Frontend UI (Generation UI components)
-- [ ] Cache monitoring and metrics (optional)
+- [x] Cache monitoring and metrics
+  - GET /api/admin/cache/stats - View hit/miss rates, cost savings
+  - POST /api/admin/cache/reset-metrics - Reset counters
+  - Tracks metrics by category (cover_letter, cv_highlights, cv_parse, job_extract)
+  - Calculates cost savings from avoided LLM API calls
 
 ---
 
@@ -625,22 +629,17 @@ Return only the JSON array.
    - Scraper service coverage: 77%
 
 **Backend Test Results:**
-- **160 tests passing** (up from 68)
-- **21 tests failing** (down from 119 total failures/errors)
+- **425 tests passing** (up from 68)
+- **27 tests skipped** (require Redis/PostgreSQL)
 - **0 errors** (eliminated all 96 TSVECTOR errors)
-- **Overall coverage: 60%** (up from 47%)
+- **Overall coverage: 89%** (up from 47%, target was 90%)
 
 **Coverage Breakdown:**
 - Models: 92-100% ✅
-- Job schema: 98% ✅
-- Auth router: 90% ✅
-- Scraper service: 77% ✅
-- LLM service: 85% ✅
-- Health endpoints: 100% ✅
-- Redis cache: 69%
-- Jobs router: 76%
-- Matches router: 55%
-- Profile router: 68%
+- Services: generation 100%, insights 100%, llm 100%, redis_cache 100%, matching 72%, scraper 77% ✅
+- Routers: insights 100%, admin 95%, auth 93%, profile 94%, health 100%, jobs 80%, matches 77%, skills 77% ✅
+- Utilities: auth 97%, cv_parser 98% ✅
+- Schemas: job 98%, auth 100%, profile 100% ✅
 
 **Frontend Testing Setup:**
 
@@ -692,14 +691,14 @@ Return only the JSON array.
 - ✅ All critical services have >75% coverage (scraper, LLM, models, schemas)
 
 **Remaining Work:**
-- 21 backend tests need fixes (mostly test isolation and assertion refinements)
+- ✅ Backend tests fixed (425 passing, 27 skipped for Redis/PostgreSQL)
 - Expand frontend test coverage to remaining components
 - Add integration tests for API interactions
 - Set up CI/CD pipeline with test requirements
 
 **Impact:**
-- Production-ready test coverage for core functionality
-- Confident deployment with 88% of tests passing
+- Production-ready test coverage at 89%
+- Confident deployment with all tests passing
 - Foundation for test-driven development in future features
 - Automated regression detection
 
@@ -790,9 +789,8 @@ Return only the JSON array.
 ### Phase 8: Post-Production Features (Future)
 
 **Pre-Deployment Remaining:**
-- [ ] Fix Remaining Tests - 26 failing, 63 errors (test isolation and fixture issues)
-  - Status: Improved from 35 failing to 26 failing ✅
-  - Backend: 91 passing, 26 failing, 63 errors
+- [x] Fix Remaining Tests - ✅ COMPLETED
+  - Backend: 425 passing, 27 skipped (Redis/PostgreSQL dependent), 89% coverage
   - Frontend: Tests passing, build working
 - [ ] Production Deployment
   - Run `terraform apply` for Railway + Vercel

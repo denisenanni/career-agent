@@ -290,3 +290,29 @@ def authenticated_client(client, test_user):
     # Add token to client headers
     client.headers = {"Authorization": f"Bearer {token}"}
     return client
+
+
+@pytest.fixture
+def admin_client(client, db_session: Session):
+    """Client authenticated as admin user (id=1)"""
+    # Ensure admin user exists
+    admin = db_session.query(User).filter(User.id == 1).first()
+    if not admin:
+        admin = User(
+            id=1,
+            email="admin@example.com",
+            hashed_password=get_password_hash("adminpass123")
+        )
+        db_session.add(admin)
+        db_session.commit()
+
+    # Login as admin
+    response = client.post(
+        "/auth/login",
+        json={"email": "admin@example.com", "password": "adminpass123"}
+    )
+    token = response.json()["access_token"]
+
+    # Add token to client headers
+    client.headers = {"Authorization": f"Bearer {token}"}
+    return client

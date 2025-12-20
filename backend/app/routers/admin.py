@@ -12,6 +12,7 @@ from app.database import get_db
 from app.models.user import User
 from app.models.allowed_email import AllowedEmail
 from app.dependencies.auth import get_current_user
+from app.services.redis_cache import get_cache_stats, reset_cache_metrics
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -163,3 +164,53 @@ async def remove_allowed_email(
     logger.info(f"Admin {admin_user.email} removed {email_lower} from allowlist")
 
     return None
+
+
+# =============================================================================
+# Cache Monitoring Endpoints
+# =============================================================================
+
+@router.get("/cache/stats")
+async def get_cache_statistics(
+    admin_user: User = Depends(get_current_admin_user)
+):
+    """
+    Get Redis cache statistics and cost savings (admin only)
+
+    Returns:
+    - Overall hit/miss rates
+    - Breakdown by cache type (cover letters, CV highlights, etc.)
+    - Estimated cost savings from cache hits
+    - Storage metrics (memory usage, key counts)
+    """
+    stats = get_cache_stats()
+
+    if not stats.get("available", False):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=stats.get("error", "Redis not available")
+        )
+
+    return stats
+
+
+@router.post("/cache/reset-metrics", status_code=status.HTTP_200_OK)
+async def reset_cache_statistics(
+    admin_user: User = Depends(get_current_admin_user)
+):
+    """
+    Reset cache metrics counters (admin only)
+
+    This resets hit/miss counters but does NOT clear cached data.
+    Useful for starting fresh metrics tracking.
+    """
+    success = reset_cache_metrics()
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Failed to reset metrics - Redis not available"
+        )
+
+    logger.info(f"Admin {admin_user.email} reset cache metrics")
+    return {"message": "Cache metrics reset successfully"}
