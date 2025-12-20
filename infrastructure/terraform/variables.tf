@@ -79,6 +79,12 @@ variable "allowed_emails" {
   default     = ""
 }
 
+variable "frontend_url" {
+  description = "Frontend URL for CORS (get from Vercel after deployment)"
+  type        = string
+  default     = "*"  # Allow all origins initially, update after Vercel deployment
+}
+
 # =============================================================================
 # DOCKER IMAGES
 # =============================================================================

@@ -138,7 +138,7 @@ resource "railway_variable" "backend_cors_origins" {
   environment_id = railway_project.main.default_environment.id
   service_id     = railway_service.backend.id
   name           = "CORS_ORIGINS"
-  value          = "https://${vercel_project_domain.frontend.domain}"
+  value          = "https://${local.app_name}.vercel.app"
 }
 
 resource "railway_variable" "backend_registration_mode" {
@@ -178,11 +178,9 @@ resource "vercel_project_environment_variable" "api_url" {
   target     = ["production", "preview"]
 }
 
-# Production domain (uses Vercel's auto-generated domain)
-resource "vercel_project_domain" "frontend" {
-  project_id = vercel_project.frontend.id
-  domain     = "${local.app_name}.vercel.app"
-}
+# Production domain - Vercel auto-assigns one
+# Removed because domain was already taken by another project
+# Vercel will provide an auto-generated domain
 
 # =============================================================================
 # GITHUB ACTIONS SECRETS

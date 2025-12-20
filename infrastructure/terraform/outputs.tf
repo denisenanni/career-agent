@@ -77,8 +77,8 @@ output "backend_service_id" {
 # =============================================================================
 
 output "frontend_url" {
-  description = "Frontend URL (Vercel domain)"
-  value       = "https://${vercel_project_domain.frontend.domain}"
+  description = "Frontend URL (Check Vercel dashboard for auto-assigned domain)"
+  value       = "Check Vercel dashboard: https://vercel.com/dashboard"
 }
 
 output "vercel_project_id" {
@@ -126,9 +126,10 @@ output "deployment_info" {
   value = {
     project_name     = railway_project.main.name
     backend_url      = "https://${railway_service_domain.backend.domain}"
-    frontend_url     = "https://${vercel_project_domain.frontend.domain}"
+    frontend_url     = "Check Vercel dashboard"
     database_service = railway_service.postgres.name
     redis_service    = railway_service.redis.name
     environment      = var.environment
+    vercel_project_id = vercel_project.frontend.id
   }
 }
