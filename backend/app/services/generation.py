@@ -7,7 +7,7 @@ to minimize API costs and provide instant responses for cached content.
 from typing import Optional, Dict, Any, List
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from anthropic import Anthropic
 from app.config import settings
 from app.services.redis_cache import (
@@ -145,7 +145,7 @@ Write the cover letter:"""
         # Prepare result
         result = {
             "cover_letter": cover_letter,
-            "generated_at": datetime.utcnow().isoformat()
+            "generated_at": datetime.now(timezone.utc).isoformat()
         }
 
         # Cache the result in Redis (30-day TTL)
@@ -281,7 +281,7 @@ Return ONLY the JSON array, no other text."""
         # Prepare result
         result = {
             "highlights": highlights,
-            "generated_at": datetime.utcnow().isoformat()
+            "generated_at": datetime.now(timezone.utc).isoformat()
         }
 
         # Cache the result in Redis (30-day TTL)

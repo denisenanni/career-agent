@@ -11,7 +11,7 @@ from app.models.user import User
 
 @pytest.fixture
 def admin_user(db_session):
-    """Create an admin user (id=1)"""
+    """Create an admin user with is_admin=True"""
     from app.utils.auth import get_password_hash
 
     # Delete any existing user with id=1
@@ -20,14 +20,15 @@ def admin_user(db_session):
 
     admin = User(
         email="admin@example.com",
-        hashed_password=get_password_hash("adminpass123")
+        hashed_password=get_password_hash("adminpass123"),
+        is_admin=True
     )
     db_session.add(admin)
     db_session.commit()
     db_session.refresh(admin)
 
-    # Ensure the user has id=1 (admin check in code)
-    assert admin.id == 1, "Admin user must have id=1 for current admin check"
+    # Verify admin flag is set
+    assert admin.is_admin is True, "Admin user must have is_admin=True"
 
     return admin
 

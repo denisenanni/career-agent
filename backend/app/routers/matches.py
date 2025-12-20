@@ -265,8 +265,8 @@ async def update_match_status(
 
     # Set applied_at if status is applied
     if status_update.status == "applied":
-        from datetime import datetime
-        match.applied_at = datetime.utcnow()
+        from datetime import datetime, timezone
+        match.applied_at = datetime.now(timezone.utc)
 
     db.commit()
     db.refresh(match)

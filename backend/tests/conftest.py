@@ -192,7 +192,8 @@ def test_user(db_session: Session):
         admin = User(
             id=1,
             email="admin@example.com",
-            hashed_password=get_password_hash("adminpass123")
+            hashed_password=get_password_hash("adminpass123"),
+            is_admin=True
         )
         db_session.add(admin)
         db_session.commit()
@@ -294,16 +295,20 @@ def authenticated_client(client, test_user):
 
 @pytest.fixture
 def admin_client(client, db_session: Session):
-    """Client authenticated as admin user (id=1)"""
+    """Client authenticated as admin user"""
     # Ensure admin user exists
     admin = db_session.query(User).filter(User.id == 1).first()
     if not admin:
         admin = User(
             id=1,
             email="admin@example.com",
-            hashed_password=get_password_hash("adminpass123")
+            hashed_password=get_password_hash("adminpass123"),
+            is_admin=True
         )
         db_session.add(admin)
+        db_session.commit()
+    elif not admin.is_admin:
+        admin.is_admin = True
         db_session.commit()
 
     # Login as admin

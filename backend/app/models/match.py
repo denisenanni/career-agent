@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text, Float, ForeignKey, JSON
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models import Base
 
 
@@ -28,8 +28,8 @@ class Match(Base):
     cv_highlights = Column(Text, nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
     def __repr__(self):
         return f"<Match(id={self.id}, user_id={self.user_id}, job_id={self.job_id}, score={self.score})>"

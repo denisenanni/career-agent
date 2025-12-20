@@ -3,7 +3,7 @@ Integration tests for Insights Router
 """
 import pytest
 from unittest.mock import patch, MagicMock
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.models.user import User
@@ -24,7 +24,7 @@ def skill_analysis(db_session: Session, user_with_skills):
     """Create a skill analysis for the user"""
     analysis = SkillAnalysis(
         user_id=user_with_skills.id,
-        analysis_date=datetime.utcnow(),
+        analysis_date=datetime.now(timezone.utc),
         market_skills={
             "python": {"count": 100, "frequency": 50.0, "avg_salary": 150000, "jobs_with_salary": 80},
             "kubernetes": {"count": 40, "frequency": 20.0, "avg_salary": 160000, "jobs_with_salary": 30},
@@ -106,7 +106,7 @@ class TestGetSkillInsights:
         }]
         mock_analysis.market_skills = {}
         mock_analysis.jobs_analyzed = 100
-        mock_analysis.analysis_date = datetime.utcnow()
+        mock_analysis.analysis_date = datetime.now(timezone.utc)
         mock_run_analysis.return_value = mock_analysis
 
         response = authenticated_client.get("/api/insights/skills")
@@ -125,7 +125,7 @@ class TestGetSkillInsights:
         mock_analysis.recommendations = []
         mock_analysis.market_skills = {}
         mock_analysis.jobs_analyzed = 50
-        mock_analysis.analysis_date = datetime.utcnow()
+        mock_analysis.analysis_date = datetime.now(timezone.utc)
         mock_run_analysis.return_value = mock_analysis
 
         response = authenticated_client.get("/api/insights/skills?refresh=true")
@@ -177,7 +177,7 @@ class TestRefreshSkillInsights:
         }]
         mock_analysis.market_skills = {"kubernetes": {"frequency": 20.0}}
         mock_analysis.jobs_analyzed = 150
-        mock_analysis.analysis_date = datetime.utcnow()
+        mock_analysis.analysis_date = datetime.now(timezone.utc)
         mock_run_analysis.return_value = mock_analysis
 
         response = authenticated_client.post("/api/insights/skills/refresh")

@@ -2,7 +2,7 @@
 Unit tests for JWT user caching optimization
 """
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 from app.dependencies.auth import (
     _get_cached_user,
@@ -63,7 +63,7 @@ class TestUserCaching:
         # Manually expire the cache entry
         with _cache_lock:
             user_obj, _ = _user_cache[sample_user.id]
-            expired_time = datetime.utcnow() - timedelta(seconds=1)
+            expired_time = datetime.now(timezone.utc) - timedelta(seconds=1)
             _user_cache[sample_user.id] = (user_obj, expired_time)
 
         # Should return None and remove expired entry

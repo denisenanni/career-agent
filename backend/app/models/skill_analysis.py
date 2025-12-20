@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, DateTime, JSON, ForeignKey
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models import Base
 
 
@@ -12,7 +12,7 @@ class SkillAnalysis(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True, unique=True)
 
     # Analysis metadata
-    analysis_date = Column(DateTime, default=datetime.utcnow, nullable=False)
+    analysis_date = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     jobs_analyzed = Column(Integer, nullable=True)
 
     # Market data - skills aggregated from all scraped jobs

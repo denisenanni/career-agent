@@ -73,7 +73,7 @@ async def update_profile(
             setattr(user, field, value)
 
     # Update timestamp
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(timezone.utc)
 
     db.commit()
     db.refresh(user)
@@ -137,7 +137,7 @@ async def upload_cv(
         user.cv_text = cv_text
         user.cv_filename = file.filename
         user.cv_uploaded_at = datetime.now(timezone.utc)
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(timezone.utc)
 
         # If LLM parsing succeeded, update profile with parsed data
         if parsed_data:
@@ -286,7 +286,7 @@ async def update_parsed_cv(
         user.experience_years = update_data['years_of_experience']
 
     # Update timestamp
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(timezone.utc)
 
     db.commit()
     db.refresh(user)

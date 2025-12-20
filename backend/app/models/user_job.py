@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, ForeignKey, UniqueConstraint
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models import Base
 
 
@@ -29,8 +29,8 @@ class UserJob(Base):
     job_type = Column(String(50), nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
     def __repr__(self):
         return f"<UserJob(id={self.id}, user_id={self.user_id}, title='{self.title}', company='{self.company}')>"

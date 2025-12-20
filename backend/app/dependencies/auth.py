@@ -5,7 +5,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import Optional, Dict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import threading
 
 from app.database import get_db
@@ -27,7 +27,7 @@ def _get_cached_user(user_id: int) -> Optional[User]:
     with _cache_lock:
         if user_id in _user_cache:
             user, expiry = _user_cache[user_id]
-            if datetime.utcnow() < expiry:
+            if datetime.now(timezone.utc) < expiry:
                 return user
             else:
                 # Remove expired entry
@@ -38,7 +38,7 @@ def _get_cached_user(user_id: int) -> Optional[User]:
 def _cache_user(user: User) -> None:
     """Cache user with TTL"""
     with _cache_lock:
-        expiry = datetime.utcnow() + _cache_ttl
+        expiry = datetime.now(timezone.utc) + _cache_ttl
         _user_cache[user.id] = (user, expiry)
 
 

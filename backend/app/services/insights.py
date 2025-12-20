@@ -291,11 +291,11 @@ def create_or_update_skill_analysis(
     # Check if analysis exists
     analysis = db.query(SkillAnalysis).filter(SkillAnalysis.user_id == user.id).first()
 
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     if analysis:
         # Update existing
-        analysis.analysis_date = datetime.utcnow()
+        analysis.analysis_date = datetime.now(timezone.utc)
         analysis.market_skills = market_skills
         analysis.user_skills = user.skills or []
         analysis.skill_gaps = skill_gaps
@@ -305,7 +305,7 @@ def create_or_update_skill_analysis(
         # Create new
         analysis = SkillAnalysis(
             user_id=user.id,
-            analysis_date=datetime.utcnow(),
+            analysis_date=datetime.now(timezone.utc),
             market_skills=market_skills,
             user_skills=user.skills or [],
             skill_gaps=skill_gaps,

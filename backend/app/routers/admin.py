@@ -18,16 +18,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-# TODO: Add proper admin role system
-# For now, using a simple check - first user (id=1) is admin
 def get_current_admin_user(current_user: User = Depends(get_current_user)) -> User:
     """
     Check if current user is an admin.
 
-    TODO: Replace with proper role-based system
-    For now: User with id=1 is considered admin
+    Returns the user if they have admin privileges, otherwise raises 403.
     """
-    if current_user.id != 1:
+    if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"

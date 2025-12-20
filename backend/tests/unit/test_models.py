@@ -2,7 +2,7 @@
 Unit tests for database models
 """
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -85,7 +85,7 @@ class TestUserModel:
 
     def test_user_cv_fields(self, db_session: Session):
         """Test CV-related fields"""
-        cv_time = datetime.utcnow()
+        cv_time = datetime.now(timezone.utc)
         user = User(
             email="cv@example.com",
             hashed_password="pwd",
@@ -99,7 +99,8 @@ class TestUserModel:
 
         assert user.cv_text == "CV content extracted text"
         assert user.cv_filename == "john_doe_cv.pdf"
-        assert user.cv_uploaded_at == cv_time
+        # Compare without timezone (SQLite strips timezone info)
+        assert user.cv_uploaded_at.replace(tzinfo=None) == cv_time.replace(tzinfo=None)
 
     def test_user_default_values(self, db_session: Session):
         """Test default values for optional fields"""
@@ -201,7 +202,7 @@ class TestMatchModel:
 
     def test_match_with_application_tracking(self, db_session: Session, sample_user, sample_job):
         """Test match with application tracking fields"""
-        applied_time = datetime.utcnow()
+        applied_time = datetime.now(timezone.utc)
         match = Match(
             user_id=sample_user.id,
             job_id=sample_job.id,
@@ -214,7 +215,8 @@ class TestMatchModel:
         db_session.refresh(match)
 
         assert match.status == "applied"
-        assert match.applied_at == applied_time
+        # Compare without timezone (SQLite strips timezone info)
+        assert match.applied_at.replace(tzinfo=None) == applied_time.replace(tzinfo=None)
 
     def test_match_with_generated_content(self, db_session: Session, sample_user, sample_job):
         """Test match with AI-generated content"""
@@ -331,7 +333,7 @@ class TestJobModel:
             remote_type="full",
             job_type="permanent",
             tags=["python", "react", "aws"],
-            posted_at=datetime.utcnow(),
+            posted_at=datetime.now(timezone.utc),
             raw_data={"original_data": "value"},
         )
         db_session.add(job)
