@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { MatchCard } from '../components/MatchCard'
 import { SkeletonList } from '../components/SkeletonCard'
 import { fetchMatches, refreshMatches } from '../api/matches'
+import { getProfile } from '../api/profile'
 import type { MatchFilters } from '../types'
 
 export function MatchesPage() {
@@ -57,6 +58,15 @@ export function MatchesPage() {
   const matches = data?.matches ?? []
   const total = data?.total ?? 0
 
+  // Fetch user profile to check if CV is uploaded
+  const { data: profile } = useQuery({
+    queryKey: ['profile'],
+    queryFn: getProfile,
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+  })
+
+  const hasCVUploaded = profile?.cv_uploaded_at !== null
+
   // Mutation for refreshing matches
   const refreshMutation = useMutation({
     mutationFn: refreshMatches,
@@ -90,6 +100,20 @@ export function MatchesPage() {
           <p className="font-medium">Matches refreshed!</p>
           <p className="text-sm">
             Created: {refreshMutation.data.matches_created}, Updated: {refreshMutation.data.matches_updated}
+          </p>
+        </div>
+      )}
+
+      {/* CV Required Warning */}
+      {!hasCVUploaded && (
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-md">
+          <p className="font-medium">CV required for job matching</p>
+          <p className="text-sm">
+            Please upload your CV on the{' '}
+            <a href="/profile" className="underline font-medium hover:text-yellow-900">
+              Profile page
+            </a>{' '}
+            to get personalized job matches.
           </p>
         </div>
       )}
