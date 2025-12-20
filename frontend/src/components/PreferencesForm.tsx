@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Settings } from 'lucide-react'
 import { updateProfile } from '../api/profile'
 import { useAuth } from '../contexts/AuthContext'
@@ -7,7 +7,7 @@ import { SaveStatusIndicator } from './SaveStatusIndicator'
 import type { UserPreferences } from '../types'
 
 export function PreferencesForm() {
-  const { user, refreshUser } = useAuth()
+  const { user } = useAuth()
 
   // Form state
   const [minSalary, setMinSalary] = useState<number | ''>('')
@@ -53,36 +53,37 @@ export function PreferencesForm() {
     data: preferences,
     onSave: async (prefs) => {
       await updateProfile({ preferences: prefs })
-      await refreshUser()
+      // Note: refreshUser() removed - form state is already updated locally
+      // and preferences are saved to backend
     },
     debounceMs: 1500,
     enabled: isInitialized, // Only enable after initial load
   })
 
-  // Toggle handlers for checkboxes
-  const toggleJobType = (type: string) => {
+  // Toggle handlers for checkboxes (memoized to prevent unnecessary re-renders)
+  const toggleJobType = useCallback((type: string) => {
     setJobTypes(prev =>
       prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
     )
-  }
+  }, [])
 
-  const toggleRemoteType = (type: string) => {
+  const toggleRemoteType = useCallback((type: string) => {
     setRemoteTypes(prev =>
       prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
     )
-  }
+  }, [])
 
-  const toggleCountry = (country: string) => {
+  const toggleCountry = useCallback((country: string) => {
     setPreferredCountries(prev =>
       prev.includes(country) ? prev.filter(c => c !== country) : [...prev, country]
     )
-  }
+  }, [])
 
-  const toggleEligibleRegion = (region: string) => {
+  const toggleEligibleRegion = useCallback((region: string) => {
     setEligibleRegions(prev =>
       prev.includes(region) ? prev.filter(r => r !== region) : [...prev, region]
     )
-  }
+  }, [])
 
   const validateMinSalary = (value: number | '') => {
     if (value !== '' && value < 0) {

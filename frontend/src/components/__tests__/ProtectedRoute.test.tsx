@@ -1,17 +1,25 @@
+// @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import { ProtectedRoute } from '../ProtectedRoute'
 
+// Mock the authApi to prevent axios from being loaded
+vi.mock('../../api/auth', () => ({
+  getToken: vi.fn(),
+  setToken: vi.fn(),
+  removeToken: vi.fn(),
+  login: vi.fn(),
+  register: vi.fn(),
+  logout: vi.fn(),
+  getCurrentUser: vi.fn(),
+}))
+
 // Mock the useAuth hook
 const mockUseAuth = vi.fn()
-vi.mock('../../contexts/AuthContext', async () => {
-  const actual = await vi.importActual('../../contexts/AuthContext')
-  return {
-    ...actual,
-    useAuth: () => mockUseAuth(),
-  }
-})
+vi.mock('../../contexts/AuthContext', () => ({
+  useAuth: () => mockUseAuth(),
+}))
 
 describe('ProtectedRoute', () => {
   beforeEach(() => {

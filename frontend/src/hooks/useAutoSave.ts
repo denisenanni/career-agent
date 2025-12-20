@@ -36,6 +36,8 @@ export function useAutoSave<T>({
   const isInitialMount = useRef(true)
   // Track the latest data for saving
   const dataRef = useRef(data)
+  // Track serialized data for deep comparison
+  const dataStringRef = useRef<string>('')
   // Track the timeout for debouncing
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Track if a save is in progress
@@ -47,6 +49,9 @@ export function useAutoSave<T>({
   useEffect(() => {
     dataRef.current = data
   }, [data])
+
+  // Serialize data for comparison (avoids triggering saves on reference-only changes)
+  const dataString = JSON.stringify(data)
 
   const performSave = useCallback(async () => {
     if (isSavingRef.current) {
@@ -80,15 +85,20 @@ export function useAutoSave<T>({
     }
   }, [onSave])
 
-  // Debounced save on data change
+  // Debounced save on data change (uses deep comparison)
   useEffect(() => {
     // Skip the initial mount
     if (isInitialMount.current) {
       isInitialMount.current = false
+      dataStringRef.current = dataString
       return
     }
 
     if (!enabled) return
+
+    // Skip if data hasn't actually changed (deep comparison)
+    if (dataString === dataStringRef.current) return
+    dataStringRef.current = dataString
 
     // Clear any existing timeout
     if (timeoutRef.current) {
@@ -106,7 +116,7 @@ export function useAutoSave<T>({
         clearTimeout(timeoutRef.current)
       }
     }
-  }, [data, debounceMs, enabled, performSave])
+  }, [dataString, debounceMs, enabled, performSave])
 
   // Manual save function (for immediate save if needed)
   const save = useCallback(async () => {

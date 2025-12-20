@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
 import type { SaveStatus } from '../hooks/useAutoSave'
 
@@ -6,7 +7,10 @@ interface SaveStatusIndicatorProps {
   error?: string | null
 }
 
-export function SaveStatusIndicator({ status, error }: SaveStatusIndicatorProps) {
+export const SaveStatusIndicator = memo(function SaveStatusIndicator({
+  status,
+  error
+}: SaveStatusIndicatorProps) {
   if (status === 'idle') {
     return null
   }
@@ -33,4 +37,4 @@ export function SaveStatusIndicator({ status, error }: SaveStatusIndicatorProps)
       )}
     </div>
   )
-}
+})

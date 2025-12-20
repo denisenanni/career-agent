@@ -367,9 +367,8 @@ describe('MyJobsPage', () => {
 
       vi.mocked(userJobsApi.deleteUserJob).mockResolvedValue(undefined)
 
-      // Mock window.confirm
-      const confirmSpy = vi.spyOn(window, 'confirm')
-      confirmSpy.mockReturnValue(true)
+      // Mock window.confirm (define if not present in happy-dom)
+      window.confirm = vi.fn(() => true)
 
       const user = userEvent.setup()
       renderMyJobsPage()
@@ -390,8 +389,6 @@ describe('MyJobsPage', () => {
         const callArgs = vi.mocked(userJobsApi.deleteUserJob).mock.calls[0]
         expect(callArgs[0]).toBe(1)
       }, { timeout: 2000 })
-
-      confirmSpy.mockRestore()
     })
 
     it('does not delete job when confirmation is canceled', async () => {
@@ -400,9 +397,8 @@ describe('MyJobsPage', () => {
         total: 1,
       })
 
-      // Mock window.confirm to return false
-      const confirmSpy = vi.spyOn(window, 'confirm')
-      confirmSpy.mockReturnValue(false)
+      // Mock window.confirm to return false (define if not present in happy-dom)
+      window.confirm = vi.fn(() => false)
 
       const user = userEvent.setup()
       renderMyJobsPage()
@@ -415,8 +411,6 @@ describe('MyJobsPage', () => {
       await user.click(deleteButton)
 
       expect(userJobsApi.deleteUserJob).not.toHaveBeenCalled()
-
-      confirmSpy.mockRestore()
     })
   })
 

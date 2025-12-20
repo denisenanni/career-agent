@@ -1,7 +1,6 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { User, Briefcase, GraduationCap, Mail, Phone, FileText } from 'lucide-react'
 import { getParsedCV, updateParsedCV } from '../api/profile'
-import { useAuth } from '../contexts/AuthContext'
 import { useAutoSave } from '../hooks/useAutoSave'
 import { SaveStatusIndicator } from './SaveStatusIndicator'
 import { SkillAutocompleteModal } from './SkillAutocompleteModal'
@@ -12,7 +11,6 @@ interface ParsedCVDisplayProps {
 }
 
 export function ParsedCVDisplay({ refreshTrigger }: ParsedCVDisplayProps = {}) {
-  const { refreshUser } = useAuth()
   const [parsedCV, setParsedCV] = useState<ParsedCV | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -38,17 +36,15 @@ export function ParsedCVDisplay({ refreshTrigger }: ParsedCVDisplayProps = {}) {
     }
   }
 
-  // Memoize the CV data for auto-save comparison
-  const cvData = useMemo(() => parsedCV, [parsedCV])
-
   // Auto-save hook
   const { status, error } = useAutoSave({
-    data: cvData,
+    data: parsedCV,
     onSave: async (data) => {
       if (!data) return
       const updated = await updateParsedCV(data)
       setParsedCV(updated)
-      await refreshUser()
+      // Note: refreshUser() removed - updateParsedCV returns updated data
+      // and user skills are synced on the backend
     },
     debounceMs: 1500,
     enabled: isInitialized && parsedCV !== null,
