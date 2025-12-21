@@ -10,7 +10,9 @@ import logging
 
 from app.models.job import Job
 from app.models.scrape_log import ScrapeLog
+from app.models.custom_skill import CustomSkill
 from app.schemas.job import JobScrapedData
+from sqlalchemy import func
 
 logger = logging.getLogger(__name__)
 
@@ -179,12 +181,51 @@ class ScraperService:
             f"{failed_count} failed (including {validation_failed_count} validation failures)"
         )
 
+        # Add job tags to custom_skills table for persistent autocomplete
+        if new_count > 0:
+            self._add_tags_to_custom_skills(jobs)
+
         return {
             "total": total - failed_count,
             "new": new_count,
             "updated": updated_count,
             "failed": failed_count,
         }
+
+    def _add_tags_to_custom_skills(self, jobs: List[Dict[str, Any]]) -> None:
+        """
+        Add job tags to custom_skills table for persistent autocomplete.
+
+        Args:
+            jobs: List of job dictionaries with tags
+        """
+        # Collect all unique tags from jobs
+        all_tags = set()
+        for job in jobs:
+            tags = job.get("tags", [])
+            if tags:
+                all_tags.update(tag.strip() for tag in tags if tag and tag.strip())
+
+        if not all_tags:
+            return
+
+        logger.info(f"Adding {len(all_tags)} unique tags to custom_skills")
+
+        try:
+            for tag in all_tags:
+                existing = self.db.query(CustomSkill).filter(
+                    func.lower(CustomSkill.skill) == tag.lower()
+                ).first()
+                if existing:
+                    existing.usage_count += 1
+                else:
+                    self.db.add(CustomSkill(skill=tag, usage_count=1))
+
+            self.db.commit()
+            logger.info(f"Successfully added tags to custom_skills")
+        except Exception as e:
+            self.db.rollback()
+            logger.warning(f"Failed to add tags to custom_skills: {e}")
 
     def get_job_by_source_id(self, source: str, source_id: str) -> Optional[Job]:
         """
