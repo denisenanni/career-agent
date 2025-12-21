@@ -210,7 +210,7 @@ async def scrape_and_save() -> dict:
         raise
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     import asyncio
     import json
     import sys
