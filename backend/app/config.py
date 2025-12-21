@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     # Rate limiting
     rate_limit_enabled: bool = True  # Disable for testing
 
+    # Scraper API key for scheduled jobs (GitHub Actions)
+    scraper_api_key: str = ""  # Set in production for /jobs/scrape endpoint
+
     @field_validator('registration_mode')
     @classmethod
     def validate_registration_mode(cls, v: str) -> str:

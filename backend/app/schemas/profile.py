@@ -48,6 +48,7 @@ class ProfileResponse(BaseModel):
     preferences: Optional[dict] = None
     cv_filename: Optional[str]
     cv_uploaded_at: Optional[datetime]
+    is_admin: bool = False
     created_at: datetime
     updated_at: datetime
 

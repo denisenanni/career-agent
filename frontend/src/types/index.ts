@@ -65,6 +65,7 @@ export interface User {
   preferences: UserPreferences
   cv_filename: string | null
   cv_uploaded_at: string | null
+  is_admin: boolean
   created_at: string
   updated_at: string
 }

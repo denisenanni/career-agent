@@ -18,10 +18,17 @@ resource "random_password" "jwt_secret" {
   special = true
 }
 
+resource "random_password" "scraper_api_key" {
+  count   = var.scraper_api_key == null ? 1 : 0
+  length  = 48
+  special = false  # URL-safe characters only
+}
+
 locals {
   app_name          = "${var.project_name}-${var.environment}"
   postgres_password = var.postgres_password != null ? var.postgres_password : random_password.postgres_password[0].result
   jwt_secret        = var.jwt_secret != null ? var.jwt_secret : random_password.jwt_secret[0].result
+  scraper_api_key   = var.scraper_api_key != null ? var.scraper_api_key : random_password.scraper_api_key[0].result
 }
 
 # =============================================================================
@@ -162,6 +169,13 @@ resource "railway_variable" "backend_allowed_emails" {
   value          = var.allowed_emails
 }
 
+resource "railway_variable" "backend_scraper_api_key" {
+  environment_id = railway_project.main.default_environment.id
+  service_id     = railway_service.backend.id
+  name           = "SCRAPER_API_KEY"
+  value          = local.scraper_api_key
+}
+
 # =============================================================================
 # FRONTEND - Vercel
 # =============================================================================
@@ -226,4 +240,22 @@ resource "github_actions_secret" "railway_project_id" {
   repository      = split("/", var.github_repo)[1]
   secret_name     = "RAILWAY_PROJECT_ID"
   plaintext_value = railway_project.main.id
+}
+
+# =============================================================================
+# SCHEDULED JOBS SECRETS
+# =============================================================================
+
+# API URL for scheduled scraping job
+resource "github_actions_secret" "api_url" {
+  repository      = split("/", var.github_repo)[1]
+  secret_name     = "API_URL"
+  plaintext_value = "https://${railway_service_domain.backend.domain}"
+}
+
+# Scraper API key for scheduled scraping job
+resource "github_actions_secret" "scraper_api_key" {
+  repository      = split("/", var.github_repo)[1]
+  secret_name     = "SCRAPER_API_KEY"
+  plaintext_value = local.scraper_api_key
 }

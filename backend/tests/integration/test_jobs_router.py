@@ -5,7 +5,7 @@ import pytest
 import os
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 
 from app.main import app
 from app.models.job import Job
@@ -333,6 +333,68 @@ class TestGetJob:
 
         # raw_data field should be present
         assert "raw_data" in data
+
+
+class TestScrapeJobs:
+    """Test POST /api/jobs/scrape endpoint (API key auth)"""
+
+    @patch('app.routers.jobs.settings')
+    def test_scrape_jobs_no_api_key(self, mock_settings, client):
+        """Test that scrape endpoint rejects requests without API key"""
+        mock_settings.scraper_api_key = "configured-key"
+
+        response = client.post("/api/jobs/scrape")
+
+        assert response.status_code == 401
+        assert "X-API-Key header required" in response.json()["detail"]
+
+    @patch('app.routers.jobs.settings')
+    def test_scrape_jobs_invalid_api_key(self, mock_settings, client):
+        """Test that scrape endpoint rejects invalid API key"""
+        mock_settings.scraper_api_key = "correct-key"
+
+        response = client.post(
+            "/api/jobs/scrape",
+            headers={"X-API-Key": "invalid-key"}
+        )
+
+        assert response.status_code == 401
+        assert "Invalid API key" in response.json()["detail"]
+
+    @patch('app.routers.jobs.settings')
+    def test_scrape_jobs_no_key_configured(self, mock_settings, client):
+        """Test that scrape endpoint fails if SCRAPER_API_KEY not configured"""
+        mock_settings.scraper_api_key = ""
+
+        response = client.post(
+            "/api/jobs/scrape",
+            headers={"X-API-Key": "some-key"}
+        )
+
+        assert response.status_code == 500
+        assert "not configured" in response.json()["detail"]
+
+    @patch('app.routers.jobs.run_scraper', new_callable=AsyncMock)
+    @patch('app.routers.jobs.settings')
+    def test_scrape_jobs_success(self, mock_settings, mock_run_scraper, client):
+        """Test successful scrape with valid API key"""
+        mock_settings.scraper_api_key = "test-scraper-key"
+        mock_run_scraper.return_value = {
+            "remoteok": {"total": 10, "new": 5},
+            "weworkremotely": {"total": 8, "new": 3}
+        }
+
+        response = client.post(
+            "/api/jobs/scrape",
+            headers={"X-API-Key": "test-scraper-key"}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["status"] == "completed"
+        assert "stats" in data
+        mock_run_scraper.assert_called_once()
 
 
 class TestRefreshJobs:

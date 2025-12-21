@@ -85,6 +85,13 @@ variable "jwt_secret" {
   default     = null
 }
 
+variable "scraper_api_key" {
+  description = "API key for scheduled job scraping (auto-generated if not provided)"
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
 variable "allowed_emails" {
   description = "Comma-separated list of allowed email addresses for registration"
   type        = string

@@ -4,9 +4,11 @@ import { MatchCard } from '../components/MatchCard'
 import { SkeletonList } from '../components/SkeletonCard'
 import { fetchMatches, refreshMatches } from '../api/matches'
 import { getProfile } from '../api/profile'
+import { useAuth } from '../contexts/AuthContext'
 import type { MatchFilters } from '../types'
 
 export function MatchesPage() {
+  const { user } = useAuth()
   const queryClient = useQueryClient()
   const [scoreRange, setScoreRange] = useState<string>('60+')
   const [statusFilter, setStatusFilter] = useState<string>('')
@@ -85,13 +87,15 @@ export function MatchesPage() {
             {total} {total === 1 ? 'match' : 'matches'} found based on your profile
           </p>
         </div>
-        <button
-          onClick={() => refreshMutation.mutate()}
-          disabled={refreshMutation.isPending}
-          className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 disabled:bg-gray-400"
-        >
-          {refreshMutation.isPending ? 'Refreshing...' : 'Refresh Matches'}
-        </button>
+        {user?.is_admin && (
+          <button
+            onClick={() => refreshMutation.mutate()}
+            disabled={refreshMutation.isPending}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 disabled:bg-gray-400"
+          >
+            {refreshMutation.isPending ? 'Refreshing...' : 'Refresh Matches'}
+          </button>
+        )}
       </div>
 
       {/* Success Message */}
@@ -211,15 +215,17 @@ export function MatchesPage() {
           <p className="text-gray-500 mb-4">
             {error
               ? 'Please make sure you have uploaded your CV and added skills to your profile.'
-              : 'Try adjusting your filters or click "Refresh Matches" to find new opportunities.'}
+              : 'Matches are generated automatically when new jobs are scraped. Try adjusting your filters or check back later.'}
           </p>
-          <button
-            onClick={() => refreshMutation.mutate()}
-            disabled={refreshMutation.isPending}
-            className="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700 disabled:bg-gray-400"
-          >
-            {refreshMutation.isPending ? 'Refreshing...' : 'Refresh Matches'}
-          </button>
+          {user?.is_admin && (
+            <button
+              onClick={() => refreshMutation.mutate()}
+              disabled={refreshMutation.isPending}
+              className="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700 disabled:bg-gray-400"
+            >
+              {refreshMutation.isPending ? 'Refreshing...' : 'Refresh Matches'}
+            </button>
+          )}
         </div>
       ) : (
         /* Matches List */

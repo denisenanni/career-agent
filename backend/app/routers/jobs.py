@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Query, Depends, HTTPException, BackgroundTasks, Request
+from fastapi import APIRouter, Query, Depends, HTTPException, BackgroundTasks, Request, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import func, over, text
 from typing import Optional
 from enum import Enum
 import logging
+import secrets
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -204,6 +205,54 @@ async def run_scraper():
         all_stats["jobicy"] = {"error": str(e)}
 
     logger.info(f"All scrapers completed: {all_stats}")
+    return all_stats
+
+
+def verify_api_key(x_api_key: str = Header(None)) -> bool:
+    """Verify the API key for scheduled scraping jobs."""
+    if not settings.scraper_api_key:
+        raise HTTPException(
+            status_code=500,
+            detail="SCRAPER_API_KEY not configured on server"
+        )
+    if not x_api_key:
+        raise HTTPException(
+            status_code=401,
+            detail="X-API-Key header required"
+        )
+    # Use constant-time comparison to prevent timing attacks
+    if not secrets.compare_digest(x_api_key, settings.scraper_api_key):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API key"
+        )
+    return True
+
+
+@router.post("/scrape")
+async def scrape_jobs(
+    api_key_valid: bool = Depends(verify_api_key),
+):
+    """
+    Run all job scrapers (for scheduled/cron jobs).
+
+    Requires X-API-Key header with valid SCRAPER_API_KEY.
+    This endpoint runs synchronously and returns when complete.
+    Matching is automatically triggered for new jobs.
+    """
+    logger.info("Scheduled job scraping started via API key")
+    try:
+        stats = await run_scraper()
+        return {
+            "status": "completed",
+            "stats": stats,
+        }
+    except Exception as e:
+        logger.error(f"Scheduled scraping failed: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Scraping failed: {str(e)}"
+        )
 
 
 @router.post("/refresh")
