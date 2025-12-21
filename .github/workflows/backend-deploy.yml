@@ -60,4 +60,4 @@ jobs:
           docker run --rm \
             -e RAILWAY_TOKEN=${{ secrets.RAILWAY_TOKEN }} \
             ghcr.io/railwayapp/cli:latest \
-            redeploy --service backend --yes
+            railway redeploy --service backend --yes
