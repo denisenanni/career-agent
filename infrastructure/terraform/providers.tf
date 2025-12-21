@@ -23,7 +23,7 @@ terraform {
 
 # Railway - manages Postgres, Redis, and Backend deployment
 provider "railway" {
-  token = var.railway_api_token
+  token = var.railway_account_token
 }
 
 # Vercel - manages Frontend deployment

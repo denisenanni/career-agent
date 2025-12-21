@@ -14,8 +14,14 @@ variable "project_name" {
 # RAILWAY
 # =============================================================================
 
-variable "railway_api_token" {
-  description = "Railway API token (get from https://railway.app/account/tokens)"
+variable "railway_account_token" {
+  description = "Railway account token for Terraform to manage resources (get from https://railway.app/account/tokens)"
+  type        = string
+  sensitive   = true
+}
+
+variable "railway_project_token" {
+  description = "Railway project token for GitHub Actions deployments"
   type        = string
   sensitive   = true
 }

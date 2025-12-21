@@ -193,11 +193,11 @@ resource "vercel_project_environment_variable" "api_url" {
 # GITHUB ACTIONS SECRETS
 # =============================================================================
 
-# Railway API token for backend deployment
+# Railway project token for backend deployment (scoped to project)
 resource "github_actions_secret" "railway_token" {
   repository      = split("/", var.github_repo)[1]
   secret_name     = "RAILWAY_TOKEN"
-  plaintext_value = var.railway_api_token
+  plaintext_value = var.railway_project_token
 }
 
 # Vercel API token for frontend deployment
