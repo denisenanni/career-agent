@@ -63,9 +63,9 @@ variable "vercel_team_id" {
 }
 
 variable "vercel_org_id" {
-  description = "Vercel organization ID (for team accounts)"
+  description = "Vercel user/org ID (required for GitHub Actions deployment). Find at vercel.com/account"
   type        = string
-  default     = ""
+  # No default - must be explicitly set to prevent accidental overwrites
 }
 
 # =============================================================================
