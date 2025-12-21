@@ -56,9 +56,8 @@ jobs:
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
 
       - name: Trigger Railway redeploy
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          npm install -g @railway/cli
-          railway link --project ${{ secrets.RAILWAY_PROJECT_ID }}
-          railway redeploy --service backend --yes
+          docker run --rm \
+            -e RAILWAY_TOKEN=${{ secrets.RAILWAY_TOKEN }} \
+            ghcr.io/railwayapp/cli:latest \
+            redeploy --service backend --yes
