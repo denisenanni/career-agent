@@ -88,12 +88,22 @@ export function JobsPage() {
         )}
       </form>
 
+      {/* No Jobs Warning */}
+      {!isLoading && jobs.length === 0 && !filters.search && (
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-md">
+          <p className="font-medium">No jobs available</p>
+          <p className="text-sm">
+            Click "Refresh Jobs" to scrape the latest remote job listings. You can refresh up to 2 times per hour.
+          </p>
+        </div>
+      )}
+
       {isLoading ? (
         <SkeletonList count={5} />
       ) : jobs.length === 0 ? (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
           <p className="text-gray-500">
-            No jobs found. Click "Refresh Jobs" to scrape latest jobs.
+            {filters.search ? 'No jobs match your search.' : 'No jobs in database yet.'}
           </p>
         </div>
       ) : (

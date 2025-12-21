@@ -61,15 +61,18 @@ class TestGetSkillInsights:
     """Test GET /api/insights/skills endpoint"""
 
     def test_get_skill_insights_no_skills(self, authenticated_client, test_user, db_session):
-        """Test getting insights when user has no skills"""
+        """Test getting insights when user has no skills - returns 200 with requires_setup flag"""
         # Ensure user has no skills
         test_user.skills = []
         db_session.commit()
 
         response = authenticated_client.get("/api/insights/skills")
 
-        assert response.status_code == 400
-        assert "add skills" in response.json()["detail"].lower()
+        assert response.status_code == 200
+        data = response.json()
+        assert data["requires_setup"] == "skills"
+        assert data["user_skills"] == []
+        assert data["recommendations"] == []
 
     def test_get_skill_insights_with_cached_analysis(
         self, authenticated_client, user_with_skills, skill_analysis
@@ -150,14 +153,17 @@ class TestRefreshSkillInsights:
     """Test POST /api/insights/skills/refresh endpoint"""
 
     def test_refresh_skill_insights_no_skills(self, authenticated_client, test_user, db_session):
-        """Test refreshing insights when user has no skills"""
+        """Test refreshing insights when user has no skills - returns 200 with requires_setup flag"""
         test_user.skills = []
         db_session.commit()
 
         response = authenticated_client.post("/api/insights/skills/refresh")
 
-        assert response.status_code == 400
-        assert "add skills" in response.json()["detail"].lower()
+        assert response.status_code == 200
+        data = response.json()
+        assert data["requires_setup"] == "skills"
+        assert data["user_skills"] == []
+        assert data["recommendations"] == []
 
     @patch('app.routers.insights.run_skill_analysis_for_user')
     def test_refresh_skill_insights_success(

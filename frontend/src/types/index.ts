@@ -196,6 +196,7 @@ export interface SkillAnalysis {
   }>
   jobs_analyzed: number
   analysis_date: string
+  requires_setup?: 'skills' | null
 }
 
 // Generation types

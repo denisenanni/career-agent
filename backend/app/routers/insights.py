@@ -38,6 +38,7 @@ class SkillAnalysisResponse(BaseModel):
     market_skills: Dict[str, Dict[str, Any]]
     jobs_analyzed: int
     analysis_date: str
+    requires_setup: Optional[str] = None  # "skills" if user needs to add skills
 
     class Config:
         from_attributes = True
@@ -62,11 +63,17 @@ async def get_skill_insights(
     - Analysis metadata
     """
     try:
-        # Check if user has skills
+        # Check if user has skills - return empty response with setup flag
         if not current_user.skills or len(current_user.skills) == 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Please add skills to your profile first"
+            from datetime import datetime
+            return SkillAnalysisResponse(
+                user_skills=[],
+                skill_gaps=[],
+                recommendations=[],
+                market_skills={},
+                jobs_analyzed=0,
+                analysis_date=datetime.utcnow().isoformat(),
+                requires_setup="skills"
             )
 
         # Check if analysis exists and is fresh
@@ -120,11 +127,17 @@ async def refresh_skill_insights(
     4. Update cached analysis
     """
     try:
-        # Check if user has skills
+        # Check if user has skills - return empty response with setup flag
         if not current_user.skills or len(current_user.skills) == 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Please add skills to your profile first"
+            from datetime import datetime
+            return SkillAnalysisResponse(
+                user_skills=[],
+                skill_gaps=[],
+                recommendations=[],
+                market_skills={},
+                jobs_analyzed=0,
+                analysis_date=datetime.utcnow().isoformat(),
+                requires_setup="skills"
             )
 
         # Run new analysis

@@ -66,14 +66,26 @@ export function InsightsPage() {
         </div>
       )}
 
+      {/* Skills Required Warning */}
+      {data?.requires_setup === 'skills' && (
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-md">
+          <p className="font-medium">CV required for insights</p>
+          <p className="text-sm">
+            Please upload your CV on the{' '}
+            <a href="/profile" className="underline font-medium hover:text-yellow-900">
+              Profile page
+            </a>{' '}
+            to extract your skills and get personalized career insights.
+          </p>
+        </div>
+      )}
+
       {/* Error State */}
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-md">
           <p className="font-medium">Error loading insights</p>
           <p className="text-sm">
-            {error instanceof Error && error.message.includes('skills')
-              ? 'Please add skills to your profile first by going to the Profile page.'
-              : error instanceof Error ? error.message : 'Unknown error'}
+            {error instanceof Error ? error.message : 'Unknown error'}
           </p>
         </div>
       )}
@@ -81,8 +93,8 @@ export function InsightsPage() {
       {/* Loading State */}
       {isLoading ? (
         <LoadingSpinner size="lg" text="Analyzing market data..." />
-      ) : !data ? (
-        /* Empty/Error State */
+      ) : !data || data.requires_setup ? (
+        /* Empty/Setup Required State */
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
           <svg
             className="mx-auto h-12 w-12 text-gray-400 mb-4"
@@ -99,7 +111,7 @@ export function InsightsPage() {
           </svg>
           <h3 className="text-lg font-medium text-gray-900 mb-2">No insights available</h3>
           <p className="text-gray-500 mb-4">
-            Add skills to your profile to get personalized career insights and recommendations.
+            Upload your CV to extract skills and get personalized career insights and recommendations.
           </p>
         </div>
       ) : (
