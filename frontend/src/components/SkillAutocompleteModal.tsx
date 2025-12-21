@@ -90,24 +90,31 @@ export function SkillAutocompleteModal({
       )
       setFilteredSkills(filtered)
       setHighlightedIndex(0)
-
-      // Debounced API search to find skills not in initial list
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current)
-      }
-      searchTimeoutRef.current = setTimeout(() => {
-        searchSkillsFromAPI(searchTerm.trim())
-      }, 300)
     } else {
       setFilteredSkills([])
     }
+  }, [searchTerm, existingSkills, allSkills])
+
+  // Debounced API search - only triggered by searchTerm changes
+  useEffect(() => {
+    if (!searchTerm.trim() || searchTerm.trim().length < 2) {
+      return
+    }
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+
+    searchTimeoutRef.current = setTimeout(() => {
+      searchSkillsFromAPI(searchTerm.trim())
+    }, 300)
 
     return () => {
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current)
       }
     }
-  }, [searchTerm, existingSkills, allSkills, searchSkillsFromAPI])
+  }, [searchTerm, searchSkillsFromAPI])
 
   // Focus input when modal opens
   useEffect(() => {
