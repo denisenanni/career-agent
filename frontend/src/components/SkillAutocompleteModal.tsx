@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { X, Search, Plus, Loader2 } from 'lucide-react'
 import { getPopularSkills, addCustomSkill } from '../api/skills'
 
@@ -25,9 +25,11 @@ export function SkillAutocompleteModal({
   const [filteredSkills, setFilteredSkills] = useState<string[]>([])
   const [allSkills, setAllSkills] = useState<string[]>(FALLBACK_SKILLS)
   const [loadingSkills, setLoadingSkills] = useState(false)
+  const [searchingSkills, setSearchingSkills] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Load popular skills from API when modal opens
   useEffect(() => {
@@ -51,6 +53,32 @@ export function SkillAutocompleteModal({
     }
   }
 
+  // Debounced API search for skills not in initial list
+  const searchSkillsFromAPI = useCallback(async (term: string) => {
+    if (term.length < 2) return
+
+    setSearchingSkills(true)
+    try {
+      const response = await getPopularSkills(50, term)
+      if (response.skills.length > 0) {
+        // Merge with existing skills, avoiding duplicates
+        setAllSkills(prev => {
+          const combined = [...prev]
+          for (const skill of response.skills) {
+            if (!combined.some(s => s.toLowerCase() === skill.toLowerCase())) {
+              combined.push(skill)
+            }
+          }
+          return combined.sort()
+        })
+      }
+    } catch (error) {
+      console.error('Failed to search skills:', error)
+    } finally {
+      setSearchingSkills(false)
+    }
+  }, [])
+
   // Filter skills based on search term and exclude existing skills
   useEffect(() => {
     if (searchTerm.trim()) {
@@ -62,10 +90,24 @@ export function SkillAutocompleteModal({
       )
       setFilteredSkills(filtered)
       setHighlightedIndex(0)
+
+      // Debounced API search to find skills not in initial list
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+      searchTimeoutRef.current = setTimeout(() => {
+        searchSkillsFromAPI(searchTerm.trim())
+      }, 300)
     } else {
       setFilteredSkills([])
     }
-  }, [searchTerm, existingSkills, allSkills])
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
+  }, [searchTerm, existingSkills, allSkills, searchSkillsFromAPI])
 
   // Focus input when modal opens
   useEffect(() => {
@@ -164,7 +206,7 @@ export function SkillAutocompleteModal({
         {/* Search Input */}
         <div className="p-4">
           <div className="relative">
-            {loadingSkills ? (
+            {loadingSkills || searchingSkills ? (
               <Loader2 className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 animate-spin" />
             ) : (
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />

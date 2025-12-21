@@ -11,8 +11,8 @@ export interface AddCustomSkillResponse {
   usage_count: number
 }
 
-export async function getPopularSkills(limit: number = 200): Promise<PopularSkillsResponse> {
-  const queryString = buildQueryString({ limit })
+export async function getPopularSkills(limit: number = 200, search?: string): Promise<PopularSkillsResponse> {
+  const queryString = buildQueryString({ limit, ...(search && { search }) })
   return apiFetch<PopularSkillsResponse>(`/api/skills/popular${queryString}`)
 }
 

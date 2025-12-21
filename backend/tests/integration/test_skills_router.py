@@ -159,6 +159,76 @@ class TestGetPopularSkills:
         # But Python should be there
         assert "Python" in data["skills"]
 
+    @requires_postgres
+    def test_get_popular_skills_with_search(self, client, multiple_jobs_with_tags):
+        """Test filtering skills by search term"""
+        response = client.get("/api/skills/popular?search=Python")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should only contain skills matching "Python"
+        assert data["total"] >= 1
+        assert "Python" in data["skills"]
+        # Non-matching skills should not be present
+        assert "JavaScript" not in data["skills"]
+        assert "React" not in data["skills"]
+
+    @requires_postgres
+    def test_get_popular_skills_search_case_insensitive(self, client, multiple_jobs_with_tags):
+        """Test that search is case insensitive"""
+        response_lower = client.get("/api/skills/popular?search=python")
+        response_upper = client.get("/api/skills/popular?search=PYTHON")
+
+        assert response_lower.status_code == 200
+        assert response_upper.status_code == 200
+
+        # Both should find Python
+        assert "Python" in response_lower.json()["skills"]
+        assert "Python" in response_upper.json()["skills"]
+
+    @requires_postgres
+    def test_get_popular_skills_search_partial_match(self, client, multiple_jobs_with_tags):
+        """Test that search matches partial skill names"""
+        response = client.get("/api/skills/popular?search=Script")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should match both JavaScript and TypeScript
+        skills = data["skills"]
+        assert any("JavaScript" in s for s in skills) or any("TypeScript" in s for s in skills)
+
+    @requires_postgres
+    def test_get_popular_skills_search_custom_skill(self, client, custom_skill):
+        """Test that search finds custom skills"""
+        response = client.get("/api/skills/popular?search=Kube")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert "Kubernetes" in data["skills"]
+
+    def test_get_popular_skills_search_no_match(self, client):
+        """Test search with no matching skills"""
+        response = client.get("/api/skills/popular?search=NonExistentSkill12345")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total"] == 0
+        assert len(data["skills"]) == 0
+
+    def test_get_popular_skills_search_with_limit(self, client, multiple_jobs_with_tags):
+        """Test combining search with limit"""
+        response = client.get("/api/skills/popular?search=P&limit=10")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should respect limit
+        assert data["total"] <= 10
+
 
 class TestAddCustomSkill:
     """Test POST /api/skills/custom endpoint"""

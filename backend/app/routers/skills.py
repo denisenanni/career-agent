@@ -39,6 +39,7 @@ SKILL_BLACKLIST = {
 @router.get("/popular")
 async def get_popular_skills(
     limit: int = Query(default=200, le=500, ge=10),
+    search: str = Query(default=None, min_length=1, max_length=100),
     db: Session = Depends(get_db)
 ):
     """
@@ -49,6 +50,7 @@ async def get_popular_skills(
     plus skills that users have added.
 
     - **limit**: Maximum number of skills to return (10-500, default 200)
+    - **search**: Optional search term to filter skills by name (case-insensitive)
 
     Returns list of skills sorted by frequency (most common first)
     """
@@ -86,11 +88,19 @@ async def get_popular_skills(
             if skill.lower() not in SKILL_BLACKLIST and len(skill) > 1
         }
 
+        # If search term provided, filter by name match (case-insensitive)
+        if search:
+            search_lower = search.lower()
+            filtered_skills = {
+                skill: freq for skill, freq in filtered_skills.items()
+                if search_lower in skill.lower()
+            }
+
         # Sort by frequency and take top N
         sorted_skills = sorted(filtered_skills.items(), key=lambda x: x[1], reverse=True)[:limit]
         skills = [skill for skill, _ in sorted_skills]
 
-        logger.info(f"Returning {len(skills)} popular skills (job tags + custom, filtered from {len(job_skills)} total)")
+        logger.info(f"Returning {len(skills)} popular skills (job tags + custom, filtered from {len(job_skills)} total, search={search})")
 
         return {
             "skills": skills,
