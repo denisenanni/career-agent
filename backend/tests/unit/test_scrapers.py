@@ -89,6 +89,77 @@ class TestWeWorkRemotelyScraper:
         assert detect_job_type("Software Engineer", "Full time position") == "permanent"
 
 
+class TestJobicyScraper:
+    """Tests for Jobicy scraper"""
+
+    def test_clean_html(self):
+        """Test HTML cleaning"""
+        from app.scrapers.jobicy import clean_html
+
+        html = "<p>Job description</p><br><strong>Requirements</strong>"
+        result = clean_html(html)
+        assert "Job description" in result
+        assert "Requirements" in result
+        assert "<" not in result
+
+    def test_normalize_job(self):
+        """Test job normalization"""
+        from app.scrapers.jobicy import normalize_job
+
+        raw_job = {
+            "id": 12345,
+            "jobTitle": "Senior Python Developer",
+            "companyName": "TechCorp",
+            "jobDescription": "<p>We need a Python developer</p>",
+            "url": "https://jobicy.com/jobs/12345",
+            "annualSalaryMin": "100000",
+            "annualSalaryMax": "150000",
+            "jobGeo": "Worldwide",
+            "jobIndustry": ["Technology", "Software"],
+            "jobType": ["Full-Time"],
+            "pubDate": "2025-12-01 10:30:00"
+        }
+
+        job = normalize_job(raw_job)
+
+        assert job["source"] == "jobicy"
+        assert job["source_id"] == "12345"
+        assert job["title"] == "Senior Python Developer"
+        assert job["company"] == "TechCorp"
+        assert job["salary_min"] == 100000
+        assert job["salary_max"] == 150000
+        assert job["remote_type"] == "full"
+        assert "technology" in job["tags"]
+
+    def test_normalize_job_contract(self):
+        """Test job type detection for contract roles"""
+        from app.scrapers.jobicy import normalize_job
+
+        raw_job = {
+            "id": 12346,
+            "jobTitle": "Contract Developer",
+            "companyName": "ContractCorp",
+            "jobDescription": "Contract position",
+            "url": "https://jobicy.com/jobs/12346",
+            "jobType": ["Contract"],
+        }
+
+        job = normalize_job(raw_job)
+        assert job["job_type"] == "contract"
+
+    def test_normalize_job_no_title(self):
+        """Test normalization with missing title returns None"""
+        from app.scrapers.jobicy import normalize_job
+
+        raw_job = {
+            "id": 12347,
+            "companyName": "SomeCorp",
+        }
+
+        job = normalize_job(raw_job)
+        assert job is None
+
+
 class TestHackerNewsScraper:
     """Tests for HackerNews scraper"""
 

@@ -192,6 +192,17 @@ async def run_scraper():
         logger.error(f"HackerNews scraper failed: {str(e)}", exc_info=True)
         all_stats["hackernews"] = {"error": str(e)}
 
+    # Jobicy
+    try:
+        logger.info("Starting Jobicy scraper...")
+        from app.scrapers.jobicy import scrape_and_save as jobicy_scrape
+        stats = await jobicy_scrape()
+        all_stats["jobicy"] = stats
+        logger.info(f"Jobicy completed: {stats}")
+    except Exception as e:
+        logger.error(f"Jobicy scraper failed: {str(e)}", exc_info=True)
+        all_stats["jobicy"] = {"error": str(e)}
+
     logger.info(f"All scrapers completed: {all_stats}")
 
 
