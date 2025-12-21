@@ -445,3 +445,253 @@ class TestCalculateTitleMatch:
         score = calculate_title_match(user, job)
         # Should use CV titles and match engineer role
         assert score > 50.0
+
+    def test_ic_engineer_vs_manager_role(self):
+        """Test IC engineer vs pure management role"""
+        user = MagicMock()
+        user.preferences = {"target_roles": ["Software Engineer", "Backend Developer"]}
+        job = MagicMock()
+        job.title = "Product Manager"  # Pure management role without engineer keyword
+
+        score = calculate_title_match(user, job)
+        # IC engineer shouldn't match pure management roles
+        assert score == 10.0
+
+    def test_manager_vs_ic_role(self):
+        """Test manager doesn't match pure IC roles"""
+        user = MagicMock()
+        user.preferences = {"target_roles": ["Engineering Manager", "Technical Lead"]}
+        job = MagicMock()
+        job.title = "Software Engineer"  # IC role
+
+        score = calculate_title_match(user, job)
+        # Manager shouldn't match pure IC roles
+        assert score == 30.0
+
+    def test_designer_role_match(self):
+        """Test designer role matching"""
+        user = MagicMock()
+        user.preferences = {"target_roles": ["UX Designer", "Product Designer"]}
+        job = MagicMock()
+        job.title = "Senior UI Designer"
+
+        score = calculate_title_match(user, job)
+        # Designer roles should match
+        assert score == 90.0
+
+    def test_data_role_match(self):
+        """Test data role matching"""
+        user = MagicMock()
+        user.preferences = {"target_roles": ["Data Scientist", "ML Engineer"]}
+        job = MagicMock()
+        job.title = "Machine Learning Engineer"
+
+        score = calculate_title_match(user, job)
+        # Data/ML roles should match
+        assert score == 90.0
+
+    def test_devops_role_match(self):
+        """Test DevOps role matching"""
+        user = MagicMock()
+        user.preferences = {"target_roles": ["DevOps Engineer"]}
+        job = MagicMock()
+        job.title = "DevOps Engineer"
+
+        score = calculate_title_match(user, job)
+        # DevOps roles should match
+        assert score == 90.0
+
+    def test_keyword_overlap_good(self):
+        """Test good keyword overlap in titles"""
+        user = MagicMock()
+        user.preferences = {"target_roles": ["Frontend React Developer"]}
+        job = MagicMock()
+        job.title = "React JavaScript Developer"
+
+        score = calculate_title_match(user, job)
+        # Both have "developer", "react" keywords (2+ overlap), should score 70
+        assert score >= 70.0
+
+    def test_keyword_overlap_some(self):
+        """Test some keyword overlap"""
+        user = MagicMock()
+        user.preferences = {"target_roles": ["Python Developer"]}
+        job = MagicMock()
+        job.title = "Python Architect"
+
+        score = calculate_title_match(user, job)
+        # 1 keyword overlap should score 50
+        assert score == 50.0
+
+    def test_no_keyword_overlap(self):
+        """Test no keyword overlap"""
+        user = MagicMock()
+        user.preferences = {"target_roles": ["Python Developer"]}
+        job = MagicMock()
+        job.title = "Java Architect"
+
+        score = calculate_title_match(user, job)
+        # No overlap should score 20
+        assert score == 20.0
+
+    def test_seniority_match_bonus(self):
+        """Test seniority match gives bonus"""
+        user = MagicMock()
+        user.preferences = {"target_roles": ["Senior Software Engineer"]}
+        job = MagicMock()
+        job.title = "Senior Backend Developer"
+
+        score = calculate_title_match(user, job)
+        # Should get engineer match (90) + seniority bonus (10) = 100
+        assert score == 100.0
+
+    def test_seniority_mismatch_penalty(self):
+        """Test seniority mismatch gives penalty"""
+        user = MagicMock()
+        user.preferences = {"target_roles": ["Senior Software Engineer"]}
+        job = MagicMock()
+        job.title = "Software Engineer"  # No senior
+
+        score = calculate_title_match(user, job)
+        # Should get engineer match (90) - seniority penalty (10) = 80
+        assert score == 80.0
+
+
+class TestCalculateMatchScore:
+    """Test overall match score calculation"""
+
+    def test_calculate_match_score_all_components(self):
+        """Test that calculate_match_score combines all scoring components"""
+        from app.services.matching import calculate_match_score
+
+        user = MagicMock()
+        user.skills = ["Python", "Django"]
+        user.preferences = {"min_salary": 100000}
+        user.experience_years = 5
+
+        job = MagicMock()
+        job.title = "Senior Python Developer"
+        job.salary_min = 120000
+        job.salary_max = None
+        job.location = "Remote"
+        job.remote_type = "full"
+        job.job_type = "permanent"
+
+        job_requirements = {
+            "required_skills": ["Python", "Django"],
+            "nice_to_have_skills": [],
+            "experience_years_min": 3,
+            "experience_years_max": 7
+        }
+
+        score, analysis = calculate_match_score(user, job, job_requirements)
+
+        # Should return score and analysis dict
+        assert isinstance(score, float)
+        assert 0 <= score <= 100
+        assert "overall_score" in analysis
+        assert "skill_score" in analysis
+        assert "title_score" in analysis
+        assert "matching_skills" in analysis
+        assert "missing_skills" in analysis
+
+
+class TestCreateMatchForJob:
+    """Test create_match_for_job function error paths"""
+
+    @pytest.mark.asyncio
+    @patch('app.services.matching.extract_job_requirements')
+    async def test_create_match_llm_returns_none(self, mock_extract):
+        """Test when LLM fails to extract requirements"""
+        from app.services.matching import create_match_for_job
+
+        mock_extract.return_value = None
+
+        db = MagicMock()
+        user = MagicMock()
+        user.id = 1
+        user.skills = ["Python"]
+        user.preferences = {}
+
+        job = MagicMock()
+        job.id = 1
+        job.title = "Developer"
+        job.description = "Test"
+        job.remote_type = "full"
+        job.eligible_regions = None
+        job.visa_sponsorship = None
+
+        result = await create_match_for_job(db, user, job)
+
+        # Should return None when LLM fails
+        assert result is None
+        mock_extract.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch('app.services.matching.extract_job_requirements')
+    async def test_create_match_score_below_threshold(self, mock_extract):
+        """Test when match score is below threshold"""
+        from app.services.matching import create_match_for_job
+
+        mock_extract.return_value = {
+            "required_skills": ["Java", "Spring"],  # User has Python, not Java
+            "nice_to_have_skills": []
+        }
+
+        db = MagicMock()
+        user = MagicMock()
+        user.id = 1
+        user.skills = ["Python"]
+        user.preferences = {}
+        user.experience_years = None
+
+        job = MagicMock()
+        job.id = 1
+        job.title = "Java Developer"
+        job.description = "Java role"
+        job.remote_type = "full"
+        job.salary_min = None
+        job.location = None
+        job.eligible_regions = None
+        job.visa_sponsorship = None
+
+        result = await create_match_for_job(db, user, job, min_score=75.0)
+
+        # Should return None when score is too low
+        assert result is None
+
+    @pytest.mark.asyncio
+    @patch('app.services.matching.extract_job_requirements')
+    async def test_create_match_database_error(self, mock_extract):
+        """Test database error handling"""
+        from app.services.matching import create_match_for_job
+
+        mock_extract.return_value = {
+            "required_skills": ["Python"],
+            "nice_to_have_skills": []
+        }
+
+        db = MagicMock()
+        db.commit.side_effect = Exception("Database error")
+
+        user = MagicMock()
+        user.id = 1
+        user.skills = ["Python"]
+        user.preferences = {}
+        user.experience_years = None
+
+        job = MagicMock()
+        job.id = 1
+        job.title = "Python Developer"
+        job.description = "Python role"
+        job.remote_type = "full"
+        job.salary_min = None
+        job.location = None
+        job.eligible_regions = None
+        job.visa_sponsorship = None
+
+        result = await create_match_for_job(db, user, job)
+
+        # Should return None and rollback on database error
+        assert result is None
+        db.rollback.assert_called_once()

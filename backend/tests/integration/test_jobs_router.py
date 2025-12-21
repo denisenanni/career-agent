@@ -441,6 +441,99 @@ class TestGetLatestScrapeLogs:
         assert response.status_code == 422
 
 
+class TestRunScraperErrorHandling:
+    """Test run_scraper function error handling for individual scrapers"""
+
+    @pytest.mark.asyncio
+    @patch('app.scrapers.remoteok.scrape_and_save')
+    async def test_run_scraper_remoteok_failure(self, mock_remoteok):
+        """Test that run_scraper continues when remoteok scraper fails"""
+        from app.routers.jobs import run_scraper
+
+        # Mock remoteok to fail
+        mock_remoteok.side_effect = Exception("RemoteOK API error")
+
+        result = await run_scraper()
+
+        # Should have error for remoteok
+        assert "remoteok" in result
+        assert "error" in result["remoteok"]
+        assert "RemoteOK API error" in result["remoteok"]["error"]
+
+    @pytest.mark.asyncio
+    @patch('app.scrapers.weworkremotely.scrape_and_save')
+    async def test_run_scraper_weworkremotely_failure(self, mock_wwr):
+        """Test that run_scraper continues when weworkremotely scraper fails"""
+        from app.routers.jobs import run_scraper
+
+        # Mock weworkremotely to fail
+        mock_wwr.side_effect = Exception("WeWorkRemotely connection timeout")
+
+        result = await run_scraper()
+
+        # Should have error for weworkremotely
+        assert "weworkremotely" in result
+        assert "error" in result["weworkremotely"]
+        assert "WeWorkRemotely connection timeout" in result["weworkremotely"]["error"]
+
+    @pytest.mark.asyncio
+    @patch('app.scrapers.hackernews.scrape_and_save')
+    async def test_run_scraper_hackernews_failure(self, mock_hn):
+        """Test that run_scraper continues when hackernews scraper fails"""
+        from app.routers.jobs import run_scraper
+
+        # Mock hackernews to fail
+        mock_hn.side_effect = Exception("HackerNews API rate limit")
+
+        result = await run_scraper()
+
+        # Should have error for hackernews
+        assert "hackernews" in result
+        assert "error" in result["hackernews"]
+        assert "HackerNews API rate limit" in result["hackernews"]["error"]
+
+    @pytest.mark.asyncio
+    @patch('app.scrapers.jobicy.scrape_and_save')
+    async def test_run_scraper_jobicy_failure(self, mock_jobicy):
+        """Test that run_scraper continues when jobicy scraper fails"""
+        from app.routers.jobs import run_scraper
+
+        # Mock jobicy to fail
+        mock_jobicy.side_effect = Exception("Jobicy parse error")
+
+        result = await run_scraper()
+
+        # Should have error for jobicy
+        assert "jobicy" in result
+        assert "error" in result["jobicy"]
+        assert "Jobicy parse error" in result["jobicy"]["error"]
+
+    @pytest.mark.asyncio
+    @patch('app.scrapers.remoteok.scrape_and_save')
+    @patch('app.scrapers.weworkremotely.scrape_and_save')
+    @patch('app.scrapers.hackernews.scrape_and_save')
+    @patch('app.scrapers.jobicy.scrape_and_save')
+    async def test_run_scraper_partial_failure(self, mock_jobicy, mock_hn, mock_wwr, mock_remoteok):
+        """Test run_scraper with some scrapers succeeding and some failing"""
+        from app.routers.jobs import run_scraper
+
+        # Mock some to succeed and some to fail
+        mock_remoteok.return_value = {"total": 10, "new": 5}
+        mock_wwr.side_effect = Exception("WWR failed")
+        mock_hn.return_value = {"total": 8, "new": 3}
+        mock_jobicy.side_effect = Exception("Jobicy failed")
+
+        result = await run_scraper()
+
+        # Check successes
+        assert result["remoteok"] == {"total": 10, "new": 5}
+        assert result["hackernews"] == {"total": 8, "new": 3}
+
+        # Check failures
+        assert "error" in result["weworkremotely"]
+        assert "error" in result["jobicy"]
+
+
 class TestHelperFunctions:
     """Test helper functions used in the router"""
 

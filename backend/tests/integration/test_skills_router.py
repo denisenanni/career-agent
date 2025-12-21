@@ -356,3 +356,54 @@ class TestAddCustomSkill:
             data = response.json()
             # Check that error is indicated
             assert "error" in data or data.get("created") is False
+
+
+class TestGetPopularSkillsErrorHandling:
+    """Test error handling in GET /api/skills/popular endpoint"""
+
+    @requires_postgres
+    def test_get_popular_skills_database_error_returns_empty(self, client, db_session, monkeypatch):
+        """Test that database errors are caught and return empty list"""
+        from unittest.mock import Mock
+        from app.routers import skills
+
+        # Mock the database execute method to raise an exception
+        original_execute = db_session.execute
+
+        def mock_execute(*args, **kwargs):
+            raise Exception("Database connection failed")
+
+        # Patch the execute method
+        monkeypatch.setattr(db_session, "execute", mock_execute)
+
+        response = client.get("/api/skills/popular")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["skills"] == []
+        assert data["total"] == 0
+
+
+class TestAddCustomSkillErrorHandling:
+    """Test error handling in POST /api/skills/custom endpoint"""
+
+    def test_add_custom_skill_database_error_returns_error_response(self, client, db_session, monkeypatch):
+        """Test database errors are caught gracefully"""
+        from unittest.mock import Mock
+
+        # Mock the database commit method to raise an exception
+        def mock_commit():
+            raise Exception("Database write failed")
+
+        monkeypatch.setattr(db_session, "commit", mock_commit)
+
+        response = client.post(
+            "/api/skills/custom",
+            json={"skill": "NewSkill"}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "error" in data
+        assert data["created"] is False
+        assert data["usage_count"] == 0

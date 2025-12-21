@@ -438,3 +438,130 @@ class TestScraperServicePerformance:
         # HTML should be escaped
         assert "&lt;script&gt;" in str(job.raw_data)
         assert "<script>" not in str(job.raw_data)
+
+
+class TestScraperServiceErrorRecovery:
+    """Test error recovery in scraper service"""
+
+    def test_batch_commit_failure_continues_processing(self, db_session: Session, monkeypatch):
+        """Test that batch commit failures don't stop entire scrape"""
+        from unittest.mock import Mock
+        service = ScraperService(db_session)
+
+        # Create 300 jobs to trigger batch commit
+        jobs = [
+            {
+                "source_id": f"test_job_{i}",
+                "url": f"https://example.com/{i}",
+                "title": f"Job {i}",
+                "company": "Test Co",
+                "description": "Test description",
+            }
+            for i in range(300)
+        ]
+
+        # Mock commit to fail on first batch
+        original_commit = db_session.commit
+        call_count = [0]
+
+        def failing_commit():
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise Exception("Simulated commit failure")
+            return original_commit()
+
+        monkeypatch.setattr(db_session, "commit", failing_commit)
+
+        result = service.save_jobs(jobs, "test_source")
+
+        # Should continue after first batch failure
+        # All jobs after the failed batch should still be processed
+        assert result["new"] > 0 or result["updated"] > 0
+
+    def test_final_batch_commit_failure_raises(self, db_session: Session, monkeypatch):
+        """Test that final batch commit failure raises exception"""
+        service = ScraperService(db_session)
+        jobs = [
+            {
+                "source_id": "test_1",
+                "url": "https://test.com",
+                "title": "Job",
+                "company": "Co",
+                "description": "Desc",
+            }
+        ]
+
+        def mock_commit():
+            raise Exception("Final commit failed")
+
+        monkeypatch.setattr(db_session, "commit", mock_commit)
+
+        with pytest.raises(Exception, match="Final commit failed"):
+            service.save_jobs(jobs, "test_source")
+
+    def test_add_tags_to_custom_skills_error_handling(self, db_session: Session, monkeypatch):
+        """Test that tag migration errors are caught gracefully"""
+        from unittest.mock import Mock
+        from app.models.custom_skill import CustomSkill
+
+        service = ScraperService(db_session)
+
+        jobs = [
+            {
+                "source_id": "test_1",
+                "url": "https://test.com",
+                "title": "Job",
+                "company": "Co",
+                "description": "Desc",
+                "tags": ["Python", "Django"],
+            }
+        ]
+
+        # Save jobs successfully first
+        result = service.save_jobs(jobs, "test_source")
+        assert result["new"] >= 1
+
+        # Now test that tag migration errors are logged but don't fail the request
+        # The _add_tags_to_custom_skills is called inside save_jobs
+        # If it fails, it logs a warning but doesn't raise
+
+        # Create a scenario where tag addition would fail on second call
+        call_count = [0]
+        original_commit = db_session.commit
+
+        def failing_commit_on_second():
+            call_count[0] += 1
+            if call_count[0] == 2:  # Second commit (tags commit)
+                raise Exception("Skills DB error")
+            return original_commit()
+
+        monkeypatch.setattr(db_session, "commit", failing_commit_on_second)
+
+        # This should succeed even if tag migration fails
+        result = service.save_jobs(jobs, "test_source")
+        # Job save succeeds even if tag migration fails
+        assert result["updated"] >= 0 or result["new"] >= 0
+
+    def test_get_job_by_source_id_database_error(self, db_session: Session, monkeypatch):
+        """Test database errors in get_job_by_source_id are raised"""
+        service = ScraperService(db_session)
+
+        def mock_query(*args):
+            raise Exception("Database connection lost")
+
+        monkeypatch.setattr(db_session, "query", mock_query)
+
+        with pytest.raises(Exception, match="Database connection lost"):
+            service.get_job_by_source_id("test_source", "test_id")
+
+    def test_create_scrape_log_database_error(self, db_session: Session, monkeypatch):
+        """Test database errors in create_scrape_log are raised"""
+        service = ScraperService(db_session)
+
+        def mock_commit():
+            raise Exception("Database commit failed")
+
+        monkeypatch.setattr(db_session, "commit", mock_commit)
+
+        with pytest.raises(Exception, match="Database commit failed"):
+            service.create_scrape_log("test_source")

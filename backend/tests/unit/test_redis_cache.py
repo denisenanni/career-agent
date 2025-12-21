@@ -674,3 +674,107 @@ class TestTtlConstantsMocked:
     def test_ttl_5_minutes(self):
         """Test 5 minutes TTL value"""
         assert TTL_5_MINUTES == 60 * 5
+
+
+class TestCacheMetrics:
+    """Test cache metrics tracking and stats"""
+
+    def test_get_cache_stats_redis_unavailable(self, reset_redis_client):
+        """Test get_cache_stats when Redis is unavailable"""
+        from app.services.redis_cache import get_cache_stats
+
+        with patch('app.services.redis_cache.get_redis_client', return_value=None):
+            result = get_cache_stats()
+
+        assert result["available"] is False
+        assert "error" in result
+
+    def test_get_cache_stats_redis_error(self, reset_redis_client):
+        """Test get_cache_stats handles Redis errors"""
+        from app.services.redis_cache import get_cache_stats
+
+        mock_client = MagicMock()
+        mock_client.hgetall.side_effect = RedisError("Connection lost")
+
+        with patch('app.services.redis_cache.get_redis_client', return_value=mock_client):
+            result = get_cache_stats()
+
+        assert result["available"] is False
+        assert "error" in result
+
+    def test_reset_cache_metrics_redis_unavailable(self, reset_redis_client):
+        """Test reset_cache_metrics when Redis is unavailable"""
+        from app.services.redis_cache import reset_cache_metrics
+
+        with patch('app.services.redis_cache.get_redis_client', return_value=None):
+            result = reset_cache_metrics()
+
+        assert result is False
+
+    def test_reset_cache_metrics_redis_error(self, reset_redis_client):
+        """Test reset_cache_metrics handles Redis errors"""
+        from app.services.redis_cache import reset_cache_metrics
+
+        mock_client = MagicMock()
+        mock_client.delete.side_effect = RedisError("Delete failed")
+
+        with patch('app.services.redis_cache.get_redis_client', return_value=mock_client):
+            result = reset_cache_metrics()
+
+        assert result is False
+
+    def test_track_cache_hit_categories(self, reset_redis_client):
+        """Test track_cache_hit identifies categories correctly"""
+        from app.services.redis_cache import track_cache_hit, _increment_metric
+
+        mock_client = MagicMock()
+
+        with patch('app.services.redis_cache.get_redis_client', return_value=mock_client):
+            # Test different key prefixes
+            track_cache_hit("cover_letter:1:2")
+            track_cache_hit("cv_highlights:1:2")
+            track_cache_hit("cv_parse:12345")
+            track_cache_hit("job_extract:456")
+            track_cache_hit("other_key")
+
+        # Verify hincrby was called for each category
+        assert mock_client.hincrby.call_count >= 10  # Each call increments category + total
+
+    def test_track_cache_miss_categories(self, reset_redis_client):
+        """Test track_cache_miss identifies categories correctly"""
+        from app.services.redis_cache import track_cache_miss
+
+        mock_client = MagicMock()
+
+        with patch('app.services.redis_cache.get_redis_client', return_value=mock_client):
+            track_cache_miss("cover_letter:1:2")
+            track_cache_miss("cv_highlights:1:2")
+            track_cache_miss("cv_parse:12345")
+            track_cache_miss("job_extract:456")
+
+        assert mock_client.hincrby.call_count >= 8
+
+    def test_track_cache_set_categories(self, reset_redis_client):
+        """Test track_cache_set identifies categories correctly"""
+        from app.services.redis_cache import track_cache_set
+
+        mock_client = MagicMock()
+
+        with patch('app.services.redis_cache.get_redis_client', return_value=mock_client):
+            track_cache_set("cover_letter:1:2")
+            track_cache_set("cv_highlights:1:2")
+            track_cache_set("cv_parse:12345")
+            track_cache_set("job_extract:456")
+
+        assert mock_client.hincrby.call_count >= 8
+
+    def test_increment_metric_redis_error(self, reset_redis_client):
+        """Test _increment_metric handles Redis errors"""
+        from app.services.redis_cache import _increment_metric
+
+        mock_client = MagicMock()
+        mock_client.hincrby.side_effect = RedisError("Increment failed")
+
+        with patch('app.services.redis_cache.get_redis_client', return_value=mock_client):
+            # Should not raise, just log
+            _increment_metric("test_key", "test_category")

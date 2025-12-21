@@ -194,6 +194,25 @@ class TestMatchesEndpoints:
         data = response.json()
         assert data["limit"] == 100  # Should be capped
 
+    def test_update_match_status_sets_applied_at(self, authenticated_client, sample_match, db_session):
+        """Test that updating status to 'applied' sets applied_at timestamp"""
+        # Initially applied_at should be None
+        assert sample_match.applied_at is None
+
+        response = authenticated_client.put(
+            f"/api/matches/{sample_match.id}/status",
+            json={"status": "applied"}
+        )
+
+        assert response.status_code == 200
+
+        # Refresh the match from database
+        db_session.refresh(sample_match)
+
+        # Now applied_at should be set
+        assert sample_match.applied_at is not None
+        assert sample_match.status == "applied"
+
 
 class TestGenerationEndpoints:
     """Test content generation endpoints"""
@@ -261,6 +280,23 @@ class TestGenerationEndpoints:
         assert response.status_code == 404
         assert "Match not found" in response.json()["detail"]
 
+    def test_regenerate_clears_cache(self, authenticated_client, sample_match_for_generation):
+        """Test that regenerate endpoint clears cache"""
+        from unittest.mock import patch
+
+        with patch('app.routers.matches.cache_delete_pattern') as mock_cache_delete:
+            mock_cache_delete.return_value = 2
+
+            response = authenticated_client.post(f"/api/matches/{sample_match_for_generation.id}/regenerate")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert "Cache cleared" in data["message"]
+            assert data["keys_invalidated"] == 2
+
+            # Verify cache_delete_pattern was called
+            mock_cache_delete.assert_called_once()
+
 
 class TestRefreshMatches:
     """Test refresh matches endpoint"""
@@ -291,3 +327,34 @@ class TestRefreshMatches:
             jobs.append(job)
         db_session.commit()
         return jobs
+
+    @pytest.mark.asyncio
+    async def test_refresh_matches_creates_matches(self, authenticated_client, user_with_skills, some_jobs):
+        """Test that refresh matches endpoint creates matches"""
+        from unittest.mock import patch, AsyncMock
+
+        # Mock the matching service to return some matches
+        with patch('app.routers.matches.match_user_with_all_jobs', new_callable=AsyncMock) as mock_match:
+            mock_match.return_value = [{"job_id": 1, "score": 75.0}]
+
+            response = authenticated_client.post("/api/matches/refresh")
+
+            assert response.status_code == 200
+            data = response.json()
+
+            assert "matches_created" in data
+            assert "matches_updated" in data
+            assert "total_jobs_processed" in data
+
+    def test_refresh_matches_error_handling(self, authenticated_client):
+        """Test that refresh matches handles errors gracefully"""
+        from unittest.mock import patch, AsyncMock
+
+        # Mock the matching service to raise an exception
+        with patch('app.routers.matches.match_user_with_all_jobs', new_callable=AsyncMock) as mock_match:
+            mock_match.side_effect = Exception("Matching service failed")
+
+            response = authenticated_client.post("/api/matches/refresh")
+
+            assert response.status_code == 500
+            assert "Failed to refresh matches" in response.json()["detail"]

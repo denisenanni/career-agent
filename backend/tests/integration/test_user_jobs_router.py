@@ -3,7 +3,7 @@ Integration tests for User Jobs Router - User-submitted job postings
 """
 import pytest
 from sqlalchemy.orm import Session
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, MagicMock, patch
 
 from app.main import app
 from app.database import get_db
@@ -137,6 +137,62 @@ class TestParseJobText:
 
         assert response.status_code == 400
         assert "Failed to parse" in response.json()["detail"]
+
+
+class TestParseLLMFunction:
+    """Test the parse_job_with_llm function directly"""
+
+    def test_parse_job_with_llm_no_client_configured(self, sample_job_text):
+        """Test parse_job_with_llm when LLM client is not configured"""
+        from app.routers.user_jobs import parse_job_with_llm
+
+        with patch('app.routers.user_jobs.llm_client', None):
+            with pytest.raises(ValueError, match="AI parsing is not available"):
+                parse_job_with_llm(sample_job_text)
+
+    @patch('app.routers.user_jobs.llm_client')
+    def test_parse_job_with_llm_invalid_json_response(self, mock_client, sample_job_text):
+        """Test parse_job_with_llm with invalid JSON from LLM"""
+        from app.routers.user_jobs import parse_job_with_llm
+
+        # Mock LLM to return invalid JSON
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text="This is not valid JSON at all")]
+        mock_client.messages.create.return_value = mock_response
+
+        with pytest.raises(ValueError, match="Failed to parse job text"):
+            parse_job_with_llm(sample_job_text)
+
+    @patch('app.routers.user_jobs.llm_client')
+    def test_parse_job_with_llm_missing_required_title(self, mock_client, sample_job_text):
+        """Test parse_job_with_llm when LLM returns JSON without required title"""
+        from app.routers.user_jobs import parse_job_with_llm
+
+        # Mock LLM to return JSON without title
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text='{"company": "Test Co", "description": "Job desc"}')]
+        mock_client.messages.create.return_value = mock_response
+
+        with pytest.raises(ValueError, match="Failed to parse job text"):
+            parse_job_with_llm(sample_job_text)
+
+    @patch('app.routers.user_jobs.llm_client')
+    def test_parse_job_with_llm_markdown_code_blocks(self, mock_client, sample_job_text):
+        """Test parse_job_with_llm removes markdown code blocks"""
+        from app.routers.user_jobs import parse_job_with_llm
+
+        # Mock LLM to return JSON wrapped in markdown code blocks
+        json_data = '{"title": "Test Job", "company": "Test Co", "required_skills": ["Python"], "nice_to_have_skills": ["Docker"]}'
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text=f'```json\n{json_data}\n```')]
+        mock_client.messages.create.return_value = mock_response
+
+        result = parse_job_with_llm(sample_job_text)
+
+        assert result["title"] == "Test Job"
+        assert result["company"] == "Test Co"
+        assert "Python" in result["tags"]
+        assert "Docker" in result["tags"]
 
 
 class TestCreateUserJob:
