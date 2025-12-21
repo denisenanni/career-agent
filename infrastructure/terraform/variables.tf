@@ -88,7 +88,7 @@ variable "jwt_secret" {
 variable "allowed_emails" {
   description = "Comma-separated list of allowed email addresses for registration"
   type        = string
-  default     = ""
+  default     = "info@devdenise.com"
 }
 
 variable "frontend_url" {
