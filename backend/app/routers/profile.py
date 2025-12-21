@@ -155,6 +155,18 @@ async def upload_cv(
                 # Combine and deduplicate
                 user.skills = list(set(existing_skills + new_skills))
 
+                # Also add to custom_skills table so they appear in autocomplete
+                from app.models.custom_skill import CustomSkill
+                from sqlalchemy import func
+                for skill in new_skills:
+                    existing = db.query(CustomSkill).filter(
+                        func.lower(CustomSkill.skill) == skill.lower()
+                    ).first()
+                    if existing:
+                        existing.usage_count += 1
+                    else:
+                        db.add(CustomSkill(skill=skill, usage_count=1))
+
             # Update experience years if provided and not already set
             if parsed_data.get('years_of_experience') and not user.experience_years:
                 user.experience_years = parsed_data['years_of_experience']
