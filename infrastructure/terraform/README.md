@@ -215,19 +215,53 @@ To deploy separate dev/staging/prod environments:
 
 ## State Management
 
-Currently using local state. For teams/production, use remote state:
+This project uses **Terraform Cloud** for remote state (free tier).
+
+### Setup (already configured)
+
+The `providers.tf` includes:
 
 ```hcl
 terraform {
-  backend "s3" {
-    bucket = "your-terraform-state-bucket"
-    key    = "career-agent/terraform.tfstate"
-    region = "us-east-1"
+  cloud {
+    organization = "denisenanni"
+    workspaces {
+      name = "career-agent"
+    }
   }
 }
 ```
 
-Or use Terraform Cloud for free remote state.
+### First-time setup for new contributors
+
+1. Create a Terraform Cloud account at https://app.terraform.io
+2. Ask to be added to the `denisenanni` organization
+3. Login locally:
+   ```bash
+   terraform login
+   ```
+4. Initialize:
+   ```bash
+   terraform init
+   ```
+
+### Why remote state matters
+
+- **Prevents data loss**: Generated secrets (postgres_password, jwt_secret) are stored in state
+- **Team collaboration**: Multiple people can work on infrastructure
+- **State locking**: Prevents concurrent modifications
+- **Version history**: Can recover from mistakes
+
+### Important: Generated Secrets
+
+If Terraform generates secrets (when not provided in tfvars), they're stored **only in state**.
+Losing state = losing the passwords = database connection failures.
+
+To view generated secrets:
+```bash
+terraform output generated_postgres_password
+terraform output generated_jwt_secret
+```
 
 ## Cost Estimate
 

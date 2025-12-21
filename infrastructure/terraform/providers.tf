@@ -1,6 +1,13 @@
 terraform {
   required_version = ">= 1.0"
 
+  cloud {
+    organization = "denisenanni"
+    workspaces {
+      name = "career-agent"
+    }
+  }
+
   required_providers {
     railway = {
       source  = "terraform-community-providers/railway"
