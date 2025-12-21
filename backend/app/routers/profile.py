@@ -69,6 +69,20 @@ async def update_profile(
             existing_prefs = user.preferences or {}
             merged_prefs = {**existing_prefs, **value}
             setattr(user, field, merged_prefs)
+        # Special handling for skills: also add to custom_skills table
+        elif field == 'skills' and value is not None:
+            setattr(user, field, value)
+            # Add skills to custom_skills table so they appear in autocomplete
+            from app.models.custom_skill import CustomSkill
+            from sqlalchemy import func
+            for skill in value:
+                existing = db.query(CustomSkill).filter(
+                    func.lower(CustomSkill.skill) == skill.lower()
+                ).first()
+                if existing:
+                    existing.usage_count += 1
+                else:
+                    db.add(CustomSkill(skill=skill, usage_count=1))
         else:
             setattr(user, field, value)
 
