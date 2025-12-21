@@ -7,6 +7,7 @@ An AI-powered job hunting assistant that:
 4. Tracks applications and provides insights
 
 **Repository:** https://github.com/denisenanni/career-agent
+**Live App:** https://career-agent-dev.vercel.app/
 
 ## Features
 
