@@ -156,18 +156,32 @@ async def get_job(job_id: int, db: Session = Depends(get_db)):
 
 
 async def run_scraper():
-    """Background task to run the scraper."""
+    """Background task to run all scrapers."""
+    all_stats = {}
+
+    # RemoteOK
     try:
-        logger.info("Starting background scraper task")
-
-        from app.scrapers.remoteok import scrape_and_save
-
-        stats = await scrape_and_save()
-        logger.info(f"Scraper completed: {stats}")
-
+        logger.info("Starting RemoteOK scraper...")
+        from app.scrapers.remoteok import scrape_and_save as remoteok_scrape
+        stats = await remoteok_scrape()
+        all_stats["remoteok"] = stats
+        logger.info(f"RemoteOK completed: {stats}")
     except Exception as e:
-        logger.error(f"Scraper failed: {str(e)}", exc_info=True)
-        raise
+        logger.error(f"RemoteOK scraper failed: {str(e)}", exc_info=True)
+        all_stats["remoteok"] = {"error": str(e)}
+
+    # We Work Remotely
+    try:
+        logger.info("Starting We Work Remotely scraper...")
+        from app.scrapers.weworkremotely import scrape_and_save as wwr_scrape
+        stats = await wwr_scrape()
+        all_stats["weworkremotely"] = stats
+        logger.info(f"We Work Remotely completed: {stats}")
+    except Exception as e:
+        logger.error(f"We Work Remotely scraper failed: {str(e)}", exc_info=True)
+        all_stats["weworkremotely"] = {"error": str(e)}
+
+    logger.info(f"All scrapers completed: {all_stats}")
 
 
 @router.post("/refresh")
