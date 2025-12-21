@@ -181,6 +181,17 @@ async def run_scraper():
         logger.error(f"We Work Remotely scraper failed: {str(e)}", exc_info=True)
         all_stats["weworkremotely"] = {"error": str(e)}
 
+    # HackerNews Who's Hiring
+    try:
+        logger.info("Starting HackerNews scraper...")
+        from app.scrapers.hackernews import scrape_and_save as hn_scrape
+        stats = await hn_scrape()
+        all_stats["hackernews"] = stats
+        logger.info(f"HackerNews completed: {stats}")
+    except Exception as e:
+        logger.error(f"HackerNews scraper failed: {str(e)}", exc_info=True)
+        all_stats["hackernews"] = {"error": str(e)}
+
     logger.info(f"All scrapers completed: {all_stats}")
 
 
