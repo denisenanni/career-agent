@@ -5,7 +5,6 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from app.services.matching import (
-    normalize_skill,
     calculate_skill_match,
     calculate_work_type_match,
     should_match_remote_type,
@@ -15,24 +14,50 @@ from app.services.matching import (
     calculate_experience_match,
     calculate_title_match,
 )
+from app.utils.skill_aliases import normalize_skill
 
 
 class TestNormalizeSkill:
-    """Test skill normalization"""
+    """Test skill normalization with alias mapping"""
 
-    def test_lowercase_conversion(self):
-        """Test that skills are lowercased"""
-        assert normalize_skill("Python") == "python"
-        assert normalize_skill("JavaScript") == "javascript"
+    def test_canonical_names(self):
+        """Test that known skills are mapped to canonical names"""
+        assert normalize_skill("Python") == "Python"
+        assert normalize_skill("python") == "Python"
+        assert normalize_skill("PYTHON") == "Python"
+        assert normalize_skill("JavaScript") == "JavaScript"
+        assert normalize_skill("js") == "JavaScript"
+        assert normalize_skill("JS") == "JavaScript"
 
     def test_whitespace_stripped(self):
-        """Test that whitespace is stripped"""
-        assert normalize_skill("  Python  ") == "python"
-        assert normalize_skill("\tJava\n") == "java"
+        """Test that whitespace is stripped before normalization"""
+        assert normalize_skill("  Python  ") == "Python"
+        assert normalize_skill("\tJava\n") == "Java"
+        assert normalize_skill("  js  ") == "JavaScript"
 
-    def test_combined_normalization(self):
-        """Test combined lowercase and strip"""
-        assert normalize_skill("  REACT  ") == "react"
+    def test_alias_resolution(self):
+        """Test that aliases are resolved to canonical names"""
+        # JavaScript ecosystem
+        assert normalize_skill("ts") == "TypeScript"
+        assert normalize_skill("reactjs") == "React"
+        assert normalize_skill("react.js") == "React"
+        assert normalize_skill("nodejs") == "Node.js"
+        assert normalize_skill("node") == "Node.js"
+
+        # Databases
+        assert normalize_skill("postgres") == "PostgreSQL"
+        assert normalize_skill("pg") == "PostgreSQL"
+        assert normalize_skill("mongo") == "MongoDB"
+
+        # Cloud
+        assert normalize_skill("aws") == "AWS"
+        assert normalize_skill("gcp") == "Google Cloud"
+        assert normalize_skill("k8s") == "Kubernetes"
+
+    def test_unknown_skills_preserved(self):
+        """Test that unknown skills are preserved with original case"""
+        assert normalize_skill("SomeUnknownSkill") == "SomeUnknownSkill"
+        assert normalize_skill("custom framework") == "custom framework"
 
 
 class TestCalculateSkillMatch:

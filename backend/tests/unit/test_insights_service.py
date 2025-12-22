@@ -70,10 +70,11 @@ class TestAnalyzeMarketSkills:
 
         result = analyze_market_skills(mock_db)
 
-        assert "python" in result
-        assert result["python"]["count"] == 2
-        assert result["python"]["frequency"] == 100.0
-        assert result["python"]["avg_salary"] == 135000.0  # (150000 + 120000) / 2
+        # Skills are stored with canonical names (proper casing)
+        assert "Python" in result
+        assert result["Python"]["count"] == 2
+        assert result["Python"]["frequency"] == 100.0
+        assert result["Python"]["avg_salary"] == 135000.0  # (150000 + 120000) / 2
 
     @patch('app.services.insights.extract_job_requirements')
     def test_analyze_market_skills_no_requirements(self, mock_extract):
@@ -116,9 +117,10 @@ class TestAnalyzeMarketSkills:
 
         result = analyze_market_skills(mock_db)
 
-        assert "python" in result
-        assert result["python"]["avg_salary"] is None
-        assert result["python"]["jobs_with_salary"] == 0
+        # Skills are stored with canonical names
+        assert "Python" in result
+        assert result["Python"]["avg_salary"] is None
+        assert result["Python"]["jobs_with_salary"] == 0
 
 
 class TestIdentifySkillGaps:
@@ -127,10 +129,11 @@ class TestIdentifySkillGaps:
     def test_identify_skill_gaps_no_gaps(self):
         """Test when user has all required skills"""
         user_skills = ["Python", "Django", "React"]
+        # Market skills use canonical names (as returned by analyze_market_skills)
         market_skills = {
-            "python": {"frequency": 50.0},
-            "django": {"frequency": 30.0},
-            "react": {"frequency": 25.0},
+            "Python": {"frequency": 50.0},
+            "Django": {"frequency": 30.0},
+            "React": {"frequency": 25.0},
         }
 
         gaps = identify_skill_gaps(user_skills, market_skills)
@@ -141,66 +144,67 @@ class TestIdentifySkillGaps:
         """Test when user is missing skills"""
         user_skills = ["Python"]
         market_skills = {
-            "python": {"frequency": 50.0},
-            "django": {"frequency": 30.0},
-            "kubernetes": {"frequency": 15.0},
+            "Python": {"frequency": 50.0},
+            "Django": {"frequency": 30.0},
+            "Kubernetes": {"frequency": 15.0},
         }
 
         gaps = identify_skill_gaps(user_skills, market_skills)
 
-        assert "django" in gaps
-        assert "kubernetes" in gaps
-        assert "python" not in gaps
+        assert "Django" in gaps
+        assert "Kubernetes" in gaps
+        assert "Python" not in gaps
 
     def test_identify_skill_gaps_below_min_frequency(self):
         """Test that low-frequency skills are excluded"""
         user_skills = []
         market_skills = {
-            "python": {"frequency": 50.0},
+            "Python": {"frequency": 50.0},
             "obscure_framework": {"frequency": 2.0},  # Below 5% default
         }
 
         gaps = identify_skill_gaps(user_skills, market_skills)
 
-        assert "python" in gaps
+        assert "Python" in gaps
         assert "obscure_framework" not in gaps
 
     def test_identify_skill_gaps_custom_min_frequency(self):
         """Test with custom minimum frequency"""
         user_skills = []
         market_skills = {
-            "python": {"frequency": 50.0},
-            "docker": {"frequency": 8.0},
+            "Python": {"frequency": 50.0},
+            "Docker": {"frequency": 8.0},
             "rare_skill": {"frequency": 3.0},
         }
 
         gaps = identify_skill_gaps(user_skills, market_skills, min_frequency=10.0)
 
-        assert "python" in gaps
-        assert "docker" not in gaps  # Below 10%
+        assert "Python" in gaps
+        assert "Docker" not in gaps  # Below 10%
         assert "rare_skill" not in gaps
 
     def test_identify_skill_gaps_case_insensitive(self):
-        """Test case-insensitive skill matching"""
-        user_skills = ["PYTHON", "Django"]
+        """Test case-insensitive skill matching via normalization"""
+        user_skills = ["python", "django"]  # lowercase input
         market_skills = {
-            "python": {"frequency": 50.0},
-            "django": {"frequency": 30.0},
-            "react": {"frequency": 25.0},
+            "Python": {"frequency": 50.0},  # canonical names
+            "Django": {"frequency": 30.0},
+            "React": {"frequency": 25.0},
         }
 
         gaps = identify_skill_gaps(user_skills, market_skills)
 
-        assert "python" not in gaps
-        assert "django" not in gaps
-        assert "react" in gaps
+        # User's "python" normalizes to "Python" which matches market key
+        assert "Python" not in gaps
+        assert "Django" not in gaps
+        assert "React" in gaps
 
     def test_identify_skill_gaps_with_whitespace(self):
         """Test that whitespace is handled"""
         user_skills = ["  Python  ", "\tDjango\n"]
         market_skills = {
-            "python": {"frequency": 50.0},
-            "django": {"frequency": 30.0},
+            "Python": {"frequency": 50.0},  # canonical names
+            "Django": {"frequency": 30.0},
         }
 
         gaps = identify_skill_gaps(user_skills, market_skills)
@@ -318,7 +322,8 @@ class TestEstimateLearningEffort:
 
     def test_estimate_effort_with_related_skills(self):
         """Test low effort when user has related skills"""
-        user_skills = {"python", "django", "flask"}
+        # Use canonical names as returned by normalize_skill
+        user_skills = {"Python", "Django", "Flask"}
 
         effort = estimate_learning_effort("fastapi", user_skills)
 
@@ -326,7 +331,7 @@ class TestEstimateLearningEffort:
 
     def test_estimate_effort_frontend_related(self):
         """Test frontend skill with frontend background"""
-        user_skills = {"react", "javascript"}
+        user_skills = {"React", "JavaScript"}
 
         effort = estimate_learning_effort("vue", user_skills)
 
@@ -335,7 +340,7 @@ class TestEstimateLearningEffort:
     def test_estimate_effort_no_related_skills_foundational(self):
         """Test foundational skill without related background"""
         # User has only frontend skills, learning a foundational backend skill
-        user_skills = {"html", "css", "react"}
+        user_skills = {"HTML", "CSS", "React"}
 
         effort = estimate_learning_effort("python", user_skills)
 
@@ -343,7 +348,7 @@ class TestEstimateLearningEffort:
 
     def test_estimate_effort_no_related_skills_advanced(self):
         """Test advanced skill without related background"""
-        user_skills = {"html", "css"}
+        user_skills = {"HTML", "CSS"}
 
         effort = estimate_learning_effort("kubernetes", user_skills)
 
@@ -351,7 +356,7 @@ class TestEstimateLearningEffort:
 
     def test_estimate_effort_unknown_skill(self):
         """Test unknown skill defaults to medium"""
-        user_skills = {"python"}
+        user_skills = {"Python"}
 
         effort = estimate_learning_effort("some_obscure_framework", user_skills)
 
@@ -359,7 +364,7 @@ class TestEstimateLearningEffort:
 
     def test_estimate_effort_devops_with_devops_background(self):
         """Test devops skill with devops background"""
-        user_skills = {"docker", "terraform"}
+        user_skills = {"Docker", "Terraform"}
 
         effort = estimate_learning_effort("kubernetes", user_skills)
 
@@ -367,7 +372,7 @@ class TestEstimateLearningEffort:
 
     def test_estimate_effort_ml_with_ml_background(self):
         """Test ML skill with ML background"""
-        user_skills = {"python", "tensorflow"}
+        user_skills = {"Python", "TensorFlow"}
 
         effort = estimate_learning_effort("pytorch", user_skills)
 

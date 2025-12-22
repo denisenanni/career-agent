@@ -8,6 +8,7 @@ from sqlalchemy import func
 from collections import Counter
 from app.models import Job, User, SkillAnalysis
 from app.services.llm import extract_job_requirements
+from app.utils.skill_aliases import normalize_skill
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ def analyze_market_skills(db: Session, limit: Optional[int] = None) -> Dict[str,
         all_skills = required_skills + nice_to_have_skills
 
         # Normalize and count
-        normalized_skills = [s.lower().strip() for s in all_skills]
+        normalized_skills = [normalize_skill(s) for s in all_skills]
 
         for skill in normalized_skills:
             skill_counter[skill] += 1
@@ -113,7 +114,7 @@ def identify_skill_gaps(user_skills: List[str], market_skills: Dict[str, Dict[st
         List of skill names user is missing
     """
     # Normalize user skills
-    normalized_user_skills = {s.lower().strip() for s in user_skills}
+    normalized_user_skills = {normalize_skill(s) for s in user_skills}
 
     # Find gaps
     gaps = []
@@ -158,7 +159,7 @@ def generate_skill_recommendations(
     recommendations = []
 
     # Get user's current skills (normalized)
-    user_skills_normalized = {s.lower().strip() for s in (user.skills or [])}
+    user_skills_normalized = {normalize_skill(s) for s in (user.skills or [])}
 
     for skill_gap in skill_gaps:
         skill_data = market_skills.get(skill_gap)
@@ -221,27 +222,28 @@ def estimate_learning_effort(skill: str, user_skills: set) -> str:
 
     Args:
         skill: Skill to learn
-        user_skills: Set of user's current skills (normalized)
+        user_skills: Set of user's current skills (normalized/canonical)
 
     Returns:
         "low" | "medium" | "high"
     """
-    skill_lower = skill.lower()
+    # Normalize the skill to canonical form
+    skill_normalized = normalize_skill(skill)
 
-    # Define related skill groups (simplified)
+    # Define related skill groups using canonical names
     skill_groups = {
-        "frontend": {"react", "vue", "angular", "javascript", "typescript", "html", "css", "tailwind", "nextjs"},
-        "backend": {"python", "java", "nodejs", "go", "ruby", "php", "django", "flask", "fastapi", "express"},
-        "database": {"postgresql", "mysql", "mongodb", "redis", "sql", "nosql", "elasticsearch"},
-        "devops": {"docker", "kubernetes", "aws", "azure", "gcp", "terraform", "ansible", "jenkins", "ci/cd"},
-        "mobile": {"react native", "flutter", "swift", "kotlin", "ios", "android"},
-        "ml": {"python", "tensorflow", "pytorch", "scikit-learn", "machine learning", "deep learning", "ai"},
+        "frontend": {"React", "Vue", "Angular", "JavaScript", "TypeScript", "HTML", "CSS", "Tailwind CSS", "Next.js"},
+        "backend": {"Python", "Java", "Node.js", "Go", "Ruby", "PHP", "Django", "Flask", "FastAPI", "Express"},
+        "database": {"PostgreSQL", "MySQL", "MongoDB", "Redis", "SQL", "Elasticsearch"},
+        "devops": {"Docker", "Kubernetes", "AWS", "Azure", "Google Cloud", "Terraform", "Ansible", "Jenkins", "CI/CD"},
+        "mobile": {"React Native", "Flutter", "Swift", "Kotlin", "iOS", "Android"},
+        "ml": {"Python", "TensorFlow", "PyTorch", "scikit-learn", "Machine Learning", "Deep Learning", "AI"},
     }
 
     # Find which group(s) the skill belongs to
     skill_group = None
     for group_name, skills in skill_groups.items():
-        if skill_lower in skills or any(s in skill_lower for s in skills):
+        if skill_normalized in skills:
             skill_group = group_name
             break
 
@@ -259,8 +261,8 @@ def estimate_learning_effort(skill: str, user_skills: set) -> str:
     else:
         # User doesn't have related skills
         # Check if it's a foundational skill
-        foundational_skills = {"javascript", "python", "sql", "html", "css", "git"}
-        if skill_lower in foundational_skills:
+        foundational_skills = {"JavaScript", "Python", "SQL", "HTML", "CSS", "Git"}
+        if skill_normalized in foundational_skills:
             return "medium"
         else:
             return "high"

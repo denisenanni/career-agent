@@ -6,13 +6,9 @@ import logging
 from sqlalchemy.orm import Session
 from app.models import User, Job, Match
 from app.services.llm import extract_job_requirements
+from app.utils.skill_aliases import normalize_skill
 
 logger = logging.getLogger(__name__)
-
-
-def normalize_skill(skill: str) -> str:
-    """Normalize skill name for comparison (lowercase, strip whitespace)"""
-    return skill.lower().strip()
 
 
 def calculate_skill_match(user_skills: List[str], job_requirements: Dict[str, Any]) -> Tuple[float, List[str], List[str]]:
