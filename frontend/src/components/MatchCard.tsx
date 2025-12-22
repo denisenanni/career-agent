@@ -53,6 +53,16 @@ export const MatchCard = memo(function MatchCard({ match }: MatchCardProps) {
         (old: MatchesResponse | undefined) => {
           if (!old?.matches) return old
 
+          // If hiding or rejecting, remove from list immediately
+          if (newStatus === 'hidden' || newStatus === 'rejected') {
+            return {
+              ...old,
+              matches: old.matches.filter((m: Match) => m.id !== match.id),
+              total: Math.max(0, (old.total || 0) - 1),
+            }
+          }
+
+          // Otherwise just update the status
           return {
             ...old,
             matches: old.matches.map((m: Match) =>

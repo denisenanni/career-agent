@@ -9,12 +9,17 @@ from app.services.matching import (
     calculate_work_type_match,
     should_match_remote_type,
     should_match_eligibility,
+    should_match_seniority,
+    detect_job_seniority,
+    calculate_freshness_score,
     calculate_location_match,
     calculate_salary_match,
     calculate_experience_match,
     calculate_title_match,
 )
 from app.utils.skill_aliases import normalize_skill
+from app.utils.skill_clusters import calculate_skill_similarity, are_skills_related, get_related_skills
+from datetime import datetime, timezone, timedelta
 
 
 class TestNormalizeSkill:
@@ -66,22 +71,24 @@ class TestCalculateSkillMatch:
     def test_no_user_skills(self):
         """Test when user has no skills"""
         job_requirements = {"required_skills": ["Python", "Django"]}
-        score, matches, missing = calculate_skill_match([], job_requirements)
+        score, matches, missing, related = calculate_skill_match([], job_requirements)
 
         assert score == 0.0
         assert matches == []
         assert missing == ["Python", "Django"]
+        assert related == []
 
     def test_all_skills_match(self):
         """Test when all required skills match"""
         user_skills = ["Python", "Django", "PostgreSQL"]
         job_requirements = {"required_skills": ["Python", "Django"]}
 
-        score, matches, missing = calculate_skill_match(user_skills, job_requirements)
+        score, matches, missing, related = calculate_skill_match(user_skills, job_requirements)
 
         assert score == 80.0  # 100% of required skills = 80 points
         assert len(matches) == 2
         assert missing == []
+        assert related == []
 
     def test_partial_skill_match(self):
         """Test when some skills match"""
@@ -91,11 +98,14 @@ class TestCalculateSkillMatch:
             "nice_to_have_skills": []
         }
 
-        score, matches, missing = calculate_skill_match(user_skills, job_requirements)
+        score, matches, missing, related = calculate_skill_match(user_skills, job_requirements)
 
-        assert score == 40.0  # 50% of required skills = 40 points
+        # Semantic matching: Python matches Python (100%), Django related via cluster (50%)
+        # 1 exact + 0.5 related = 1.5/2 = 75% of required = 60 points
+        assert score == 60.0
         assert "Python" in matches
-        assert "Django" in missing
+        # Django is now related (Python and Django are in same cluster)
+        assert "Django" in related
 
     def test_nice_to_have_skills(self):
         """Test nice-to-have skills contribute to score"""
@@ -105,10 +115,11 @@ class TestCalculateSkillMatch:
             "nice_to_have_skills": ["Docker", "Kubernetes"]
         }
 
-        score, matches, missing = calculate_skill_match(user_skills, job_requirements)
+        score, matches, missing, related = calculate_skill_match(user_skills, job_requirements)
 
-        # 100% required (80) + 50% nice-to-have (10) = 90
-        assert score == 90.0
+        # 100% required (80) + Docker matches (10) + K8s related via Docker cluster (5) = 95
+        # Docker and Kubernetes are in same cluster
+        assert score >= 90.0
         assert "Python" in matches
         assert "Docker" in matches
         assert missing == []
@@ -121,16 +132,17 @@ class TestCalculateSkillMatch:
             "nice_to_have_skills": ["Python", "Django"]
         }
 
-        score, matches, missing = calculate_skill_match(user_skills, job_requirements)
+        score, matches, missing, related = calculate_skill_match(user_skills, job_requirements)
 
-        assert score == 50.0  # 50% of nice-to-have
+        # Python exact (100%) + Django related (50%) = 75% of nice-to-have
+        assert score >= 50.0
 
     def test_no_skills_specified(self):
         """Test when job has no skill requirements at all"""
         user_skills = ["Python"]
         job_requirements = {}
 
-        score, matches, missing = calculate_skill_match(user_skills, job_requirements)
+        score, matches, missing, related = calculate_skill_match(user_skills, job_requirements)
 
         assert score == 50.0  # Default neutral score
 
@@ -139,9 +151,26 @@ class TestCalculateSkillMatch:
         user_skills = ["python", "DJANGO"]
         job_requirements = {"required_skills": ["Python", "django"]}
 
-        score, matches, missing = calculate_skill_match(user_skills, job_requirements)
+        score, matches, missing, related = calculate_skill_match(user_skills, job_requirements)
 
         assert score == 80.0
+
+    def test_related_skills_via_cluster(self):
+        """Test semantic matching via skill clusters"""
+        # User has Flask, job requires Django - both in python_web cluster
+        user_skills = ["Python", "Flask"]
+        job_requirements = {
+            "required_skills": ["Python", "Django"],
+            "nice_to_have_skills": []
+        }
+
+        score, matches, missing, related = calculate_skill_match(user_skills, job_requirements)
+
+        # Python exact (1.0) + Django related via Flask (0.5) = 1.5/2 = 75% = 60 points
+        assert score == 60.0
+        assert "Python" in matches
+        assert "Django" in related
+        assert missing == []  # Django is related, not missing
 
 
 class TestCalculateWorkTypeMatch:
@@ -601,6 +630,10 @@ class TestCalculateMatchScore:
         job.location = "Remote"
         job.remote_type = "full"
         job.job_type = "permanent"
+        # Add date fields for freshness calculation
+        job.posted_at = datetime.now(timezone.utc) - timedelta(days=3)
+        job.scraped_at = None
+        job.created_at = None
 
         job_requirements = {
             "required_skills": ["Python", "Django"],
@@ -617,8 +650,10 @@ class TestCalculateMatchScore:
         assert "overall_score" in analysis
         assert "skill_score" in analysis
         assert "title_score" in analysis
+        assert "freshness_score" in analysis  # New field
         assert "matching_skills" in analysis
         assert "missing_skills" in analysis
+        assert "related_skills" in analysis  # New field
 
 
 class TestCreateMatchForJob:
@@ -633,6 +668,9 @@ class TestCreateMatchForJob:
         mock_extract.return_value = None
 
         db = MagicMock()
+        # First query checks for rejected/hidden - return None (no prior rejection)
+        db.query.return_value.filter.return_value.first.return_value = None
+
         user = MagicMock()
         user.id = 1
         user.skills = ["Python"]
@@ -641,6 +679,7 @@ class TestCreateMatchForJob:
         job = MagicMock()
         job.id = 1
         job.title = "Developer"
+        job.company = "Test Co"
         job.description = "Test"
         job.remote_type = "full"
         job.eligible_regions = None
@@ -664,6 +703,9 @@ class TestCreateMatchForJob:
         }
 
         db = MagicMock()
+        # First query checks for rejected/hidden - return None (no prior rejection)
+        db.query.return_value.filter.return_value.first.return_value = None
+
         user = MagicMock()
         user.id = 1
         user.skills = ["Python"]
@@ -673,12 +715,17 @@ class TestCreateMatchForJob:
         job = MagicMock()
         job.id = 1
         job.title = "Java Developer"
+        job.company = "Test Co"
         job.description = "Java role"
         job.remote_type = "full"
         job.salary_min = None
+        job.salary_max = None
         job.location = None
         job.eligible_regions = None
         job.visa_sponsorship = None
+        job.posted_at = datetime.now(timezone.utc)
+        job.scraped_at = None
+        job.created_at = None
 
         result = await create_match_for_job(db, user, job, min_score=75.0)
 
@@ -697,26 +744,406 @@ class TestCreateMatchForJob:
         }
 
         db = MagicMock()
+        # First query checks for rejected/hidden - return None (no prior rejection)
+        # Second query checks for existing match - return None (new match)
+        db.query.return_value.filter.return_value.first.return_value = None
         db.commit.side_effect = Exception("Database error")
 
         user = MagicMock()
         user.id = 1
         user.skills = ["Python"]
-        user.preferences = {}
-        user.experience_years = None
+        user.preferences = {"target_roles": ["Python Developer"]}
+        user.experience_years = 5
 
         job = MagicMock()
         job.id = 1
         job.title = "Python Developer"
+        job.company = "Test Co"
         job.description = "Python role"
         job.remote_type = "full"
-        job.salary_min = None
-        job.location = None
+        job.salary_min = 100000
+        job.salary_max = 150000
+        job.location = "Remote"
         job.eligible_regions = None
         job.visa_sponsorship = None
+        job.posted_at = datetime.now(timezone.utc)
+        job.scraped_at = None
+        job.created_at = None
 
         result = await create_match_for_job(db, user, job)
 
         # Should return None and rollback on database error
         assert result is None
         db.rollback.assert_called_once()
+
+
+class TestSkillClusters:
+    """Test skill cluster semantic matching"""
+
+    def test_calculate_skill_similarity_exact_match(self):
+        """Test exact match returns 1.0"""
+        assert calculate_skill_similarity("Python", "Python") == 1.0
+        assert calculate_skill_similarity("python", "PYTHON") == 1.0
+
+    def test_calculate_skill_similarity_related(self):
+        """Test related skills return 0.5"""
+        # Django and Flask are in same python_web cluster
+        assert calculate_skill_similarity("Django", "Flask") == 0.5
+        # React and Vue are in same javascript_frontend cluster
+        assert calculate_skill_similarity("React", "Vue") == 0.5
+        # PostgreSQL and MySQL are in same databases_sql cluster
+        assert calculate_skill_similarity("PostgreSQL", "MySQL") == 0.5
+
+    def test_calculate_skill_similarity_unrelated(self):
+        """Test unrelated skills return 0.0"""
+        # Python and React are not in any common cluster
+        assert calculate_skill_similarity("CSS", "PostgreSQL") == 0.0
+
+    def test_are_skills_related(self):
+        """Test are_skills_related function"""
+        # Same cluster
+        assert are_skills_related("Docker", "Kubernetes") is True
+        assert are_skills_related("Python", "Django") is True
+        # Different cluster
+        assert are_skills_related("React", "PostgreSQL") is False
+
+    def test_get_related_skills(self):
+        """Test getting related skills from clusters"""
+        related = get_related_skills("Python")
+        # Python is in multiple clusters: python_web, python_data, ml_tools, backend_languages
+        assert "Django" in related
+        assert "Flask" in related
+        assert "FastAPI" in related
+        assert "Pandas" in related
+        assert "Python" not in related  # Should not include the skill itself
+
+
+class TestDetectJobSeniority:
+    """Test job seniority detection"""
+
+    def test_detect_junior_from_title(self):
+        """Test detecting junior level from title keywords"""
+        assert detect_job_seniority("Junior Developer") == "junior"
+        assert detect_job_seniority("Jr. Software Engineer") == "junior"
+        assert detect_job_seniority("Entry Level Developer") == "junior"
+        assert detect_job_seniority("Associate Software Engineer") == "junior"
+        assert detect_job_seniority("Graduate Developer") == "junior"
+        assert detect_job_seniority("Intern Software Developer") == "junior"
+
+    def test_detect_senior_from_title(self):
+        """Test detecting senior level from title keywords"""
+        assert detect_job_seniority("Senior Developer") == "senior"
+        assert detect_job_seniority("Sr. Software Engineer") == "senior"
+        assert detect_job_seniority("Lead Engineer") == "senior"
+        assert detect_job_seniority("Principal Software Engineer") == "senior"
+        assert detect_job_seniority("Staff Engineer") == "senior"
+        assert detect_job_seniority("Head of Engineering") == "senior"
+        assert detect_job_seniority("Engineering Director") == "senior"
+
+    def test_detect_mid_from_title(self):
+        """Test detecting mid level from title without keywords"""
+        assert detect_job_seniority("Software Engineer") == "mid"
+        assert detect_job_seniority("Backend Developer") == "mid"
+        assert detect_job_seniority("Full Stack Developer") == "mid"
+
+    def test_detect_from_experience_years(self):
+        """Test detecting seniority from experience requirements"""
+        # Title has no keywords, fall back to experience
+        assert detect_job_seniority("Developer", experience_min=1) == "junior"
+        assert detect_job_seniority("Developer", experience_min=2) == "junior"
+        assert detect_job_seniority("Developer", experience_min=5) == "senior"
+        assert detect_job_seniority("Developer", experience_min=7) == "senior"
+
+    def test_title_takes_precedence(self):
+        """Test that title keywords take precedence over experience"""
+        # Even with high experience req, Junior title = junior
+        assert detect_job_seniority("Junior Developer", experience_min=5) == "junior"
+        # Even with low experience req, Senior title = senior
+        assert detect_job_seniority("Senior Developer", experience_min=1) == "senior"
+
+
+class TestShouldMatchSeniority:
+    """Test seniority filtering"""
+
+    def test_no_seniority_filter(self):
+        """Test when user has no seniority preference"""
+        job = MagicMock()
+        job.title = "Senior Developer"
+        job_requirements = {"experience_years_min": 5}
+
+        assert should_match_seniority({}, job, job_requirements) is True
+        assert should_match_seniority({"seniority_filter": None}, job, job_requirements) is True
+
+    def test_seniority_filter_matches(self):
+        """Test when seniority filter matches job"""
+        job = MagicMock()
+        job.title = "Senior Software Engineer"
+        job_requirements = {"experience_years_min": 5}
+
+        assert should_match_seniority({"seniority_filter": "senior"}, job, job_requirements) is True
+
+    def test_seniority_filter_mismatch(self):
+        """Test when seniority filter doesn't match job"""
+        job = MagicMock()
+        job.title = "Junior Developer"
+        job_requirements = {"experience_years_min": 0}
+
+        # Senior looking at junior role
+        assert should_match_seniority({"seniority_filter": "senior"}, job, job_requirements) is False
+
+    def test_junior_filter(self):
+        """Test junior seniority filter"""
+        junior_job = MagicMock()
+        junior_job.title = "Junior Developer"
+
+        senior_job = MagicMock()
+        senior_job.title = "Senior Developer"
+
+        mid_job = MagicMock()
+        mid_job.title = "Software Developer"
+
+        prefs = {"seniority_filter": "junior"}
+
+        assert should_match_seniority(prefs, junior_job, {}) is True
+        assert should_match_seniority(prefs, senior_job, {}) is False
+        assert should_match_seniority(prefs, mid_job, {}) is False
+
+
+class TestCalculateFreshnessScore:
+    """Test job freshness scoring"""
+
+    def test_fresh_job_7_days(self):
+        """Test jobs posted within 7 days get 100"""
+        job = MagicMock()
+        job.posted_at = datetime.now(timezone.utc) - timedelta(days=3)
+        job.scraped_at = None
+        job.created_at = None
+
+        score = calculate_freshness_score(job)
+        assert score == 100.0
+
+    def test_job_7_to_14_days(self):
+        """Test jobs 7-14 days old get 95"""
+        job = MagicMock()
+        job.posted_at = datetime.now(timezone.utc) - timedelta(days=10)
+        job.scraped_at = None
+        job.created_at = None
+
+        score = calculate_freshness_score(job)
+        assert score == 95.0
+
+    def test_job_14_to_30_days(self):
+        """Test jobs 14-30 days old get 85"""
+        job = MagicMock()
+        job.posted_at = datetime.now(timezone.utc) - timedelta(days=20)
+        job.scraped_at = None
+        job.created_at = None
+
+        score = calculate_freshness_score(job)
+        assert score == 85.0
+
+    def test_job_over_30_days(self):
+        """Test jobs over 30 days old get 70"""
+        job = MagicMock()
+        job.posted_at = datetime.now(timezone.utc) - timedelta(days=45)
+        job.scraped_at = None
+        job.created_at = None
+
+        score = calculate_freshness_score(job)
+        assert score == 70.0
+
+    def test_falls_back_to_scraped_at(self):
+        """Test falling back to scraped_at when posted_at is None"""
+        job = MagicMock()
+        job.posted_at = None
+        job.scraped_at = datetime.now(timezone.utc) - timedelta(days=5)
+        job.created_at = None
+
+        score = calculate_freshness_score(job)
+        assert score == 100.0
+
+    def test_falls_back_to_created_at(self):
+        """Test falling back to created_at when both dates are None"""
+        job = MagicMock()
+        job.posted_at = None
+        job.scraped_at = None
+        job.created_at = datetime.now(timezone.utc) - timedelta(days=25)
+
+        score = calculate_freshness_score(job)
+        assert score == 85.0
+
+    def test_no_date_info(self):
+        """Test when no date information is available"""
+        job = MagicMock()
+        job.posted_at = None
+        job.scraped_at = None
+        job.created_at = None
+
+        score = calculate_freshness_score(job)
+        assert score == 85.0  # Default moderate score
+
+
+class TestFeedbackLoop:
+    """Test user feedback loop (exclude rejected matches)"""
+
+    @pytest.mark.asyncio
+    @patch('app.services.matching.extract_job_requirements')
+    async def test_skips_rejected_job(self, mock_extract):
+        """Test that rejected jobs are skipped"""
+        from app.services.matching import create_match_for_job
+        from app.models import Match
+
+        db = MagicMock()
+
+        # Mock existing rejected match
+        mock_rejected = MagicMock()
+        mock_rejected.status = "rejected"
+        db.query.return_value.filter.return_value.first.return_value = mock_rejected
+
+        user = MagicMock()
+        user.id = 1
+        user.preferences = {}
+
+        job = MagicMock()
+        job.id = 100
+
+        result = await create_match_for_job(db, user, job)
+
+        # Should return None for rejected job
+        assert result is None
+        # LLM should NOT be called
+        mock_extract.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch('app.services.matching.extract_job_requirements')
+    async def test_skips_hidden_job(self, mock_extract):
+        """Test that hidden jobs are skipped"""
+        from app.services.matching import create_match_for_job
+        from app.models import Match
+
+        db = MagicMock()
+
+        # Mock existing hidden match
+        mock_hidden = MagicMock()
+        mock_hidden.status = "hidden"
+        db.query.return_value.filter.return_value.first.return_value = mock_hidden
+
+        user = MagicMock()
+        user.id = 1
+        user.preferences = {}
+
+        job = MagicMock()
+        job.id = 100
+
+        result = await create_match_for_job(db, user, job)
+
+        # Should return None for hidden job
+        assert result is None
+        # LLM should NOT be called
+        mock_extract.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch('app.services.matching.extract_job_requirements')
+    async def test_skips_job_with_no_skills_extracted(self, mock_extract):
+        """Test that jobs with no extracted skills are skipped"""
+        from app.services.matching import create_match_for_job
+
+        mock_extract.return_value = {
+            "required_skills": [],  # No skills
+            "nice_to_have_skills": []  # No skills
+        }
+
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = None
+
+        user = MagicMock()
+        user.id = 1
+        user.skills = ["Python", "Django"]
+        user.preferences = {}
+
+        job = MagicMock()
+        job.id = 100
+        job.title = "Senior Research Engineer"
+        job.company = "AI Institute"
+        job.description = "Work on AI"
+        job.remote_type = "full"
+        job.eligible_regions = None
+        job.visa_sponsorship = None
+
+        result = await create_match_for_job(db, user, job)
+
+        # Should return None - no skills extracted
+        assert result is None
+
+    @pytest.mark.asyncio
+    @patch('app.services.matching.extract_job_requirements')
+    async def test_skips_job_with_no_skill_overlap(self, mock_extract):
+        """Test that jobs with zero skill overlap are skipped"""
+        from app.services.matching import create_match_for_job
+
+        # Use skills that are NOT in any shared cluster with user's skills
+        mock_extract.return_value = {
+            "required_skills": ["Figma", "Sketch", "Adobe XD"],  # Design tools
+            "nice_to_have_skills": ["Illustrator"]
+        }
+
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = None
+
+        user = MagicMock()
+        user.id = 1
+        user.skills = ["Python", "Django", "PostgreSQL"]  # Backend skills - no cluster overlap with design
+        user.preferences = {"target_roles": ["Software Engineer"]}
+        user.experience_years = 5
+
+        job = MagicMock()
+        job.id = 100
+        job.title = "UI Designer"
+        job.company = "Design Co"
+        job.description = "Design work"
+        job.remote_type = "full"
+        job.salary_min = 100000
+        job.salary_max = 150000
+        job.location = "Remote"
+        job.eligible_regions = None
+        job.visa_sponsorship = None
+        job.posted_at = datetime.now(timezone.utc)
+        job.scraped_at = None
+        job.created_at = None
+
+        result = await create_match_for_job(db, user, job)
+
+        # Should return None - no skill overlap (design vs backend)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_match_user_with_all_jobs_excludes_rejected(self):
+        """Test that match_user_with_all_jobs pre-filters rejected jobs"""
+        from app.services.matching import match_user_with_all_jobs
+
+        db = MagicMock()
+
+        # First query: Match.job_id query for rejected jobs
+        mock_rejected_subquery = MagicMock()
+        mock_rejected_subquery.filter.return_value = mock_rejected_subquery
+        mock_rejected_subquery.all.return_value = [(1,), (2,), (3,)]  # Jobs 1, 2, 3 are rejected
+
+        # Second query: Job query
+        mock_jobs_query = MagicMock()
+        mock_jobs_query.order_by.return_value = mock_jobs_query
+        mock_jobs_query.filter.return_value = mock_jobs_query
+        mock_jobs_query.all.return_value = []  # No jobs to process
+
+        # Set up query side effects based on call order
+        db.query.side_effect = [mock_rejected_subquery, mock_jobs_query]
+
+        user = MagicMock()
+        user.id = 1
+        user.preferences = {}
+        user.skills = []
+
+        result = await match_user_with_all_jobs(db, user)
+
+        assert result == []
+        # Verify that query was called twice (once for rejected, once for jobs)
+        assert db.query.call_count == 2

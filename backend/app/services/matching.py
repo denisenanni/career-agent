@@ -1,62 +1,101 @@
 """
 Matching service for comparing user profiles with job requirements
 """
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Set
+from datetime import datetime, timezone
 import logging
 from sqlalchemy.orm import Session
 from app.models import User, Job, Match
 from app.services.llm import extract_job_requirements
 from app.utils.skill_aliases import normalize_skill
+from app.utils.skill_clusters import calculate_skill_similarity, get_related_skills
 
 logger = logging.getLogger(__name__)
 
 
-def calculate_skill_match(user_skills: List[str], job_requirements: Dict[str, Any]) -> Tuple[float, List[str], List[str]]:
+def calculate_skill_match(user_skills: List[str], job_requirements: Dict[str, Any]) -> Tuple[float, List[str], List[str], List[str]]:
     """
-    Calculate skill match score and identify matches/gaps
+    Calculate skill match score with semantic matching (skill clusters).
+
+    Uses both exact matches and related skill matches:
+    - Exact match = 100% credit
+    - Related skill (same cluster) = 50% credit
 
     Args:
         user_skills: List of user's skills
         job_requirements: Extracted job requirements with required_skills and nice_to_have_skills
 
     Returns:
-        Tuple of (score, matching_skills, missing_skills)
+        Tuple of (score, matching_skills, missing_skills, related_skills)
         - score: 0-100 representing skill match percentage
-        - matching_skills: Skills user has that match job requirements
-        - missing_skills: Required skills user is missing
+        - matching_skills: Skills user has that exactly match
+        - missing_skills: Required skills user is missing (no exact or related match)
+        - related_skills: Skills matched via cluster relationship
     """
     if not user_skills:
-        return 0.0, [], job_requirements.get("required_skills", [])
+        return 0.0, [], job_requirements.get("required_skills", []), []
 
     # Normalize all skills
     normalized_user_skills = {normalize_skill(s) for s in user_skills}
     required_skills = [normalize_skill(s) for s in job_requirements.get("required_skills", [])]
     nice_to_have = [normalize_skill(s) for s in job_requirements.get("nice_to_have_skills", [])]
 
-    # Find matches
-    required_matches = [s for s in required_skills if s in normalized_user_skills]
-    nice_to_have_matches = [s for s in nice_to_have if s in normalized_user_skills]
-    missing_required = [s for s in required_skills if s not in normalized_user_skills]
+    # Calculate semantic score for required skills
+    required_exact_matches = []
+    required_related_matches = []
+    required_missing = []
+    required_total_score = 0.0
 
-    # Calculate score
+    for req_skill in required_skills:
+        best_similarity = 0.0
+        matched_by = None
+
+        for user_skill in normalized_user_skills:
+            similarity = calculate_skill_similarity(user_skill, req_skill)
+            if similarity > best_similarity:
+                best_similarity = similarity
+                matched_by = user_skill
+
+        if best_similarity == 1.0:
+            required_exact_matches.append(req_skill)
+            required_total_score += 1.0
+        elif best_similarity >= 0.5:
+            required_related_matches.append(req_skill)
+            required_total_score += 0.5
+        else:
+            required_missing.append(req_skill)
+
+    # Calculate semantic score for nice-to-have skills
+    nice_to_have_score = 0.0
+    if nice_to_have:
+        for nth_skill in nice_to_have:
+            best_similarity = 0.0
+            for user_skill in normalized_user_skills:
+                similarity = calculate_skill_similarity(user_skill, nth_skill)
+                if similarity > best_similarity:
+                    best_similarity = similarity
+            nice_to_have_score += best_similarity
+
+    # Calculate final score
     if not required_skills:
-        # If no required skills specified, check nice-to-have
         if not nice_to_have:
-            return 50.0, [], []  # No skills specified at all
-        score = (len(nice_to_have_matches) / len(nice_to_have)) * 100
+            return 50.0, [], [], []  # No skills specified
+        score = (nice_to_have_score / len(nice_to_have)) * 100
     else:
         # Weight: 80% required skills, 20% nice-to-have
-        required_score = (len(required_matches) / len(required_skills)) * 80
-        nice_to_have_score = (len(nice_to_have_matches) / len(nice_to_have) * 20) if nice_to_have else 0
-        score = required_score + nice_to_have_score
+        required_pct = (required_total_score / len(required_skills)) * 80
+        nice_pct = (nice_to_have_score / len(nice_to_have) * 20) if nice_to_have else 0
+        score = required_pct + nice_pct
 
     # Return original case for display
     matching_skills_display = [s for s in job_requirements.get("required_skills", []) + job_requirements.get("nice_to_have_skills", [])
                                 if normalize_skill(s) in normalized_user_skills]
     missing_skills_display = [s for s in job_requirements.get("required_skills", [])
-                               if normalize_skill(s) not in normalized_user_skills]
+                               if normalize_skill(s) in required_missing]
+    related_skills_display = [s for s in job_requirements.get("required_skills", [])
+                               if normalize_skill(s) in required_related_matches]
 
-    return round(score, 2), matching_skills_display, missing_skills_display
+    return round(score, 2), matching_skills_display, missing_skills_display, related_skills_display
 
 
 def calculate_work_type_match(user_preferences: Dict[str, Any], job: Job) -> float:
@@ -144,6 +183,103 @@ def should_match_eligibility(user_preferences: Dict[str, Any], job: Job) -> bool
             return False
 
     return True
+
+
+def detect_job_seniority(job_title: str, experience_min: Optional[int] = None) -> str:
+    """
+    Detect job seniority level from title and experience requirements.
+
+    Args:
+        job_title: Job title string
+        experience_min: Minimum experience years required (if known)
+
+    Returns:
+        "junior", "mid", or "senior"
+    """
+    title_lower = job_title.lower()
+
+    junior_keywords = ["junior", "jr", "entry", "associate", "graduate", "intern", "trainee"]
+    senior_keywords = ["senior", "sr", "lead", "principal", "staff", "head", "director", "vp", "chief"]
+
+    # Check title keywords first (most reliable)
+    if any(kw in title_lower for kw in junior_keywords):
+        return "junior"
+    if any(kw in title_lower for kw in senior_keywords):
+        return "senior"
+
+    # Fall back to experience requirements
+    if experience_min is not None:
+        if experience_min >= 5:
+            return "senior"
+        elif experience_min <= 2:
+            return "junior"
+
+    return "mid"
+
+
+def should_match_seniority(user_preferences: Dict[str, Any], job: Job, job_requirements: Dict[str, Any]) -> bool:
+    """
+    Hard filter: Check if job seniority matches user's preferred level.
+
+    Args:
+        user_preferences: User preferences dict
+        job: Job object
+        job_requirements: Extracted job requirements
+
+    Returns:
+        True if job should be matched, False to skip
+    """
+    user_seniority = user_preferences.get("seniority_filter")
+
+    # No filter = accept all
+    if not user_seniority:
+        return True
+
+    job_seniority = detect_job_seniority(
+        job.title,
+        job_requirements.get("experience_years_min")
+    )
+
+    return job_seniority == user_seniority
+
+
+def calculate_freshness_score(job: Job) -> float:
+    """
+    Calculate score based on job posting age.
+
+    Gentle decay curve:
+    - 0-7 days: 100%
+    - 7-14 days: 95%
+    - 14-30 days: 85%
+    - 30+ days: 70%
+
+    Args:
+        job: Job object
+
+    Returns:
+        Score 0-100
+    """
+    # Use posted_at if available, fall back to scraped_at or created_at
+    posted = job.posted_at or job.scraped_at or job.created_at
+
+    if not posted:
+        return 85.0  # Unknown age, assume moderate
+
+    # Ensure posted is timezone-aware
+    if posted.tzinfo is None:
+        posted = posted.replace(tzinfo=timezone.utc)
+
+    now = datetime.now(timezone.utc)
+    days_old = (now - posted).days
+
+    if days_old <= 7:
+        return 100.0
+    elif days_old <= 14:
+        return 95.0
+    elif days_old <= 30:
+        return 85.0
+    else:
+        return 70.0
 
 
 def calculate_location_match(user_preferences: Dict[str, Any], job: Job) -> float:
@@ -359,23 +495,22 @@ def calculate_match_score(
     user_prefs = user.preferences or {}
 
     # Calculate individual scores
-    skill_score, matching_skills, missing_skills = calculate_skill_match(user_skills, job_requirements)
+    skill_score, matching_skills, missing_skills, related_skills = calculate_skill_match(user_skills, job_requirements)
     title_score = calculate_title_match(user, job)
-    # Note: work_type is now a hard filter (handled by should_match_remote_type)
-    # and is no longer part of the scoring algorithm
     location_score = calculate_location_match(user_prefs, job)
     salary_score = calculate_salary_match(user_prefs, job)
     experience_score = calculate_experience_match(user, job_requirements)
+    freshness_score = calculate_freshness_score(job)
 
     # Weighted average (total = 100%)
-    # Title matching is critical - prevent irrelevant role matches
-    # Remote/work type is a hard filter, not included in scoring
+    # Freshness added to encourage applying to recent jobs
     weights = {
-        "skills": 0.40,          # 40% (was 35%, +5% from removing work_type)
+        "skills": 0.35,          # 35% (reduced from 40% to add freshness)
         "title": 0.20,           # 20% (prevents "Director" for ICs)
         "location": 0.10,        # 10%
         "salary": 0.10,          # 10%
-        "experience": 0.20,      # 20% (was 15%, +5% from removing work_type)
+        "experience": 0.15,      # 15% (reduced from 20% to add freshness)
+        "freshness": 0.10,       # 10% (NEW - encourages recent jobs)
     }
 
     overall_score = (
@@ -383,7 +518,8 @@ def calculate_match_score(
         title_score * weights["title"] +
         location_score * weights["location"] +
         salary_score * weights["salary"] +
-        experience_score * weights["experience"]
+        experience_score * weights["experience"] +
+        freshness_score * weights["freshness"]
     )
 
     analysis = {
@@ -393,8 +529,10 @@ def calculate_match_score(
         "location_score": round(location_score, 2),
         "salary_score": round(salary_score, 2),
         "experience_score": round(experience_score, 2),
+        "freshness_score": round(freshness_score, 2),
         "matching_skills": matching_skills,
         "missing_skills": missing_skills,
+        "related_skills": related_skills,
         "weights": weights,
     }
 
@@ -420,6 +558,16 @@ async def create_match_for_job(
         Match object if score >= min_score, None otherwise
     """
     try:
+        # Feedback loop: Skip if user already rejected/hidden this job
+        existing_rejected = db.query(Match).filter(
+            Match.user_id == user.id,
+            Match.job_id == job.id,
+            Match.status.in_(["rejected", "hidden"])
+        ).first()
+        if existing_rejected:
+            logger.debug(f"Skipping job {job.id} - user {user.id} already {existing_rejected.status} it")
+            return None
+
         # Hard filters: Check preferences first (before expensive LLM call)
         user_prefs = user.preferences or {}
 
@@ -444,6 +592,13 @@ async def create_match_for_job(
             logger.warning(f"Failed to extract requirements for job {job.id}")
             return None
 
+        # Hard filter: Skip jobs with no skills extracted (likely poor job description)
+        required_skills = job_requirements.get("required_skills", [])
+        nice_to_have_skills = job_requirements.get("nice_to_have_skills", [])
+        if not required_skills and not nice_to_have_skills:
+            logger.info(f"Job {job.id} has no skills extracted - skipping")
+            return None
+
         # Save eligibility data to Job table if extracted and not already set
         if job.eligible_regions is None and job_requirements.get("eligible_regions"):
             job.eligible_regions = job_requirements["eligible_regions"]
@@ -458,8 +613,21 @@ async def create_match_for_job(
             db.add(job)
             db.flush()  # Update job without committing yet
 
+        # Seniority filter: Check after LLM extraction (needs experience_years_min)
+        if not should_match_seniority(user_prefs, job, job_requirements):
+            job_seniority = detect_job_seniority(job.title, job_requirements.get("experience_years_min"))
+            logger.info(f"Job {job.id} seniority '{job_seniority}' doesn't match user {user.id} preference '{user_prefs.get('seniority_filter')}'")
+            return None
+
         # Calculate match score
         score, analysis = calculate_match_score(user, job, job_requirements)
+
+        # Hard filter: Require at least 1 skill match (exact or related)
+        matching_skills = analysis.get("matching_skills", [])
+        related_skills = analysis.get("related_skills", [])
+        if not matching_skills and not related_skills:
+            logger.info(f"Job {job.id} has no skill overlap with user {user.id} - skipping")
+            return None
 
         # Only create match if score meets threshold
         if score < min_score:
@@ -520,8 +688,17 @@ async def match_user_with_all_jobs(
     Returns:
         List of Match objects created
     """
-    # Get all jobs
+    # Pre-filter: Get job IDs user has rejected/hidden (to exclude from matching)
+    rejected_job_ids = db.query(Match.job_id).filter(
+        Match.user_id == user.id,
+        Match.status.in_(["rejected", "hidden"])
+    ).all()
+    rejected_ids = {r[0] for r in rejected_job_ids}
+
+    # Get all jobs, excluding rejected ones
     query = db.query(Job).order_by(Job.scraped_at.desc())
+    if rejected_ids:
+        query = query.filter(~Job.id.in_(rejected_ids))
     if limit:
         query = query.limit(limit)
 
@@ -533,7 +710,7 @@ async def match_user_with_all_jobs(
         if match:
             matches.append(match)
 
-    logger.info(f"Created {len(matches)} matches for user {user.id} from {len(jobs)} jobs")
+    logger.info(f"Created {len(matches)} matches for user {user.id} from {len(jobs)} jobs (excluded {len(rejected_ids)} rejected)")
     return matches
 
 

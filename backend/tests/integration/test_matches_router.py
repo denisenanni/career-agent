@@ -108,6 +108,52 @@ class TestMatchesEndpoints:
         assert data["matches"][0]["score"] == 85.0
         assert data["matches"][0]["status"] == "matched"
 
+    def test_list_matches_excludes_hidden_by_default(self, authenticated_client, sample_match, db_session):
+        """Test that hidden matches are excluded from the default list"""
+        # First, update the match to hidden status
+        sample_match.status = "hidden"
+        db_session.commit()
+
+        # List matches without status filter - hidden should be excluded
+        response = authenticated_client.get("/api/matches")
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total"] == 0
+        assert len(data["matches"]) == 0
+
+        # But explicitly requesting hidden status should show it
+        response = authenticated_client.get("/api/matches?status=hidden")
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total"] == 1
+        assert len(data["matches"]) == 1
+        assert data["matches"][0]["status"] == "hidden"
+
+    def test_list_matches_excludes_rejected_by_default(self, authenticated_client, sample_match, db_session):
+        """Test that rejected matches are excluded from the default list"""
+        # First, update the match to rejected status
+        sample_match.status = "rejected"
+        db_session.commit()
+
+        # List matches without status filter - rejected should be excluded
+        response = authenticated_client.get("/api/matches")
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total"] == 0
+        assert len(data["matches"]) == 0
+
+        # But explicitly requesting rejected status should show it
+        response = authenticated_client.get("/api/matches?status=rejected")
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total"] == 1
+        assert len(data["matches"]) == 1
+        assert data["matches"][0]["status"] == "rejected"
+
     def test_get_match(self, authenticated_client, sample_match):
         """Test GET /api/matches/{match_id} endpoint"""
         response = authenticated_client.get(f"/api/matches/{sample_match.id}")

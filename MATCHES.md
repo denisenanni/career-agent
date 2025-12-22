@@ -16,7 +16,20 @@ Only jobs scoring **60+** (configurable) are saved as matches.
 
 These are checked BEFORE scoring. If any fail, the job is skipped entirely (no match created).
 
-### 1. Remote Type Filter
+### 1. User Feedback Loop (NEW)
+
+Previously rejected or hidden jobs are never shown again.
+
+| Existing Match Status | Result |
+|----------------------|--------|
+| `rejected` | EXCLUDED |
+| `hidden` | EXCLUDED |
+| `matched`, `interested`, `applied` | Continue to other filters |
+| No existing match | Continue to other filters |
+
+**How it works**: Before any scoring, the system checks if the user has previously rejected or hidden this job. If so, it's skipped entirely - no LLM calls, no scoring.
+
+### 2. Remote Type Filter
 
 | User Preference | Job Property | Result |
 |-----------------|--------------|--------|
@@ -25,7 +38,7 @@ These are checked BEFORE scoring. If any fail, the job is skipped entirely (no m
 
 **Example**: User wants `["full", "hybrid"]` → Job with `"onsite"` is EXCLUDED
 
-### 2. Employment Eligibility Filter
+### 3. Employment Eligibility Filter
 
 Two sub-checks:
 
@@ -45,6 +58,43 @@ Two sub-checks:
 | `true` | `null` (unknown) | PASS (assume possible) |
 | `false` | Any | PASS |
 
+### 4. Minimum Skills Extracted (NEW)
+
+Jobs with no extracted skills are skipped entirely.
+
+| LLM Extraction Result | Result |
+|----------------------|--------|
+| `required_skills = []` AND `nice_to_have_skills = []` | EXCLUDED |
+| At least 1 skill extracted | Continue to other filters |
+
+**Why**: If the LLM couldn't extract any skills, the job description is likely too vague or the extraction failed. These jobs would get inflated scores from other factors (title, location, salary) despite having no skill relevance.
+
+### 5. Minimum Skill Overlap (NEW)
+
+User must have at least 1 matching or related skill.
+
+| Skill Match Result | Result |
+|-------------------|--------|
+| 0 exact matches AND 0 related matches | EXCLUDED |
+| At least 1 exact or related match | Continue to scoring |
+
+**Why**: A job with zero skill overlap is not a real match, even if title/salary/location look good. This prevents irrelevant jobs from appearing just because they're senior roles with good pay.
+
+### 6. Seniority Filter
+
+Optionally filter jobs by seniority level (Junior/Mid/Senior).
+
+| User Preference | Job Seniority | Result |
+|-----------------|---------------|--------|
+| `preferences.seniority_filter = "senior"` | "senior" | PASS |
+| `preferences.seniority_filter = "senior"` | "junior" or "mid" | EXCLUDED |
+| `preferences.seniority_filter = null` | Any | PASS (no filter) |
+
+**Seniority Detection**:
+- **Junior**: Title contains "junior", "jr", "entry", "associate", "graduate", "intern", "trainee" OR experience_min <= 2
+- **Senior**: Title contains "senior", "sr", "lead", "principal", "staff", "head", "director", "vp", "chief" OR experience_min >= 5
+- **Mid**: Everything else
+
 ---
 
 ## Weighted Scoring Factors
@@ -53,28 +103,51 @@ Jobs that pass hard filters are scored on a 0-100 scale using these weighted fac
 
 | Factor | Weight | Description |
 |--------|--------|-------------|
-| **Skills** | 40% | How well user skills match job requirements |
+| **Skills** | 35% | How well user skills match job requirements (with semantic matching) |
 | **Title** | 20% | Role/category alignment with user's background |
-| **Experience** | 20% | Years of experience vs job requirements |
+| **Experience** | 15% | Years of experience vs job requirements |
 | **Location** | 10% | Geographic preference match |
 | **Salary** | 10% | Salary expectations vs job offering |
+| **Freshness** | 10% | How recently the job was posted (NEW) |
 
-### 1. Skill Match (40%)
+### 1. Skill Match (35%)
 
 **Inputs**:
 - `user.skills` (from profile)
 - `job_requirements.required_skills` (extracted by LLM)
 - `job_requirements.nice_to_have_skills` (extracted by LLM)
 
+**Semantic Skill Matching (NEW)**:
+Skills are matched using **skill clusters** for partial credit:
+- **Exact match** = 100% credit
+- **Related skill** (same cluster) = 50% credit
+- **No match** = 0% credit
+
+**Skill Clusters**:
+```
+python_web: Python, Django, Flask, FastAPI, SQLAlchemy, Celery
+javascript_frontend: JavaScript, TypeScript, React, Vue, Angular, Next.js, Svelte
+javascript_backend: JavaScript, TypeScript, Node.js, Express, NestJS, Fastify
+databases_sql: PostgreSQL, MySQL, SQL Server, SQL, SQLite, MariaDB
+databases_nosql: MongoDB, Redis, Elasticsearch, DynamoDB, Cassandra
+cloud_aws: AWS, EC2, S3, Lambda, CloudFormation, ECS, EKS, RDS
+devops_containers: Docker, Kubernetes, ECS, EKS, GKE, AKS, Podman
+ml_frameworks: TensorFlow, PyTorch, scikit-learn, Keras, JAX
+```
+
+See `backend/app/utils/skill_clusters.py` for full cluster definitions.
+
+**Example**: User has `Flask` → Job requires `Django` → 50% credit (both in python_web cluster)
+
 **Scoring**:
 ```
 If job has required_skills:
-  required_score = (matched_required / total_required) * 80
-  nice_to_have_score = (matched_nice_to_have / total_nice_to_have) * 20
+  required_score = (semantic_score / total_required) * 80
+  nice_to_have_score = (semantic_score / total_nice_to_have) * 20
   score = required_score + nice_to_have_score
 
 If job has only nice_to_have:
-  score = (matched / total) * 100
+  score = (semantic_score / total) * 100
 
 If job has no skill requirements:
   score = 50 (neutral)
@@ -90,10 +163,7 @@ Skills are normalized to canonical names before comparison:
 - `aws`, `amazon web services` → `AWS`
 - See `backend/app/utils/skill_aliases.py` for full mapping
 
-**Notes**:
-- Case-insensitive matching with alias resolution
-- Required skills worth 4x more than nice-to-have
-- Returns: matching_skills list, missing_skills list
+**Returns**: matching_skills, missing_skills, related_skills (NEW)
 
 ### 2. Title Match (20%)
 
@@ -116,7 +186,7 @@ Skills are normalized to canonical names before comparison:
 - Senior ↔ Senior: +10 bonus (max 100)
 - Senior ↔ Non-Senior: -10 penalty
 
-### 3. Experience Match (20%)
+### 3. Experience Match (15%)
 
 **Inputs**:
 - `user.experience_years`
@@ -167,17 +237,36 @@ Skills are normalized to canonical names before comparison:
 | Job salary 80-90% of minimum | 60 |
 | Job salary < 80% of minimum | 30 |
 
+### 6. Freshness Score (10%) - NEW
+
+**Inputs**:
+- `job.posted_at` (preferred)
+- Falls back to `job.scraped_at` or `job.created_at`
+
+**Scoring** (gentle decay curve):
+
+| Job Age | Score |
+|---------|-------|
+| 0-7 days | 100 |
+| 7-14 days | 95 |
+| 14-30 days | 85 |
+| 30+ days | 70 |
+| Unknown date | 85 |
+
+**Why**: Encourages applying to recent jobs while not harshly penalizing older postings that might still be relevant.
+
 ---
 
 ## Final Score Calculation
 
 ```
 overall_score = (
-    skill_score     * 0.40 +
-    title_score     * 0.20 +
-    experience_score * 0.20 +
-    location_score  * 0.10 +
-    salary_score    * 0.10
+    skill_score      * 0.35 +
+    title_score      * 0.20 +
+    experience_score * 0.15 +
+    location_score   * 0.10 +
+    salary_score     * 0.10 +
+    freshness_score  * 0.10
 )
 ```
 
@@ -216,6 +305,9 @@ Before scoring, the LLM extracts structured data from job descriptions:
 ```
 User + Job
     │
+    ├─→ [HARD FILTER] Feedback Loop (rejected/hidden)
+    │   ✗ → Skip job (user already rejected)
+    │
     ├─→ [HARD FILTER] Remote Type
     │   ✗ → Skip job
     │
@@ -225,7 +317,16 @@ User + Job
     ├─→ [LLM] Extract job requirements
     │   ✗ → Skip job (extraction failed)
     │
-    ├─→ [SCORE] Calculate all 5 factors
+    ├─→ [HARD FILTER] Minimum Skills Extracted
+    │   ✗ → Skip job (no skills in job description)
+    │
+    ├─→ [HARD FILTER] Seniority (if user set preference)
+    │   ✗ → Skip job
+    │
+    ├─→ [SCORE] Calculate all 6 factors
+    │
+    ├─→ [HARD FILTER] Minimum Skill Overlap
+    │   ✗ → Skip job (zero skill match)
     │
     ├─→ [AGGREGATE] Weighted sum
     │
@@ -253,14 +354,17 @@ User + Job
     "location_score": 100.0,
     "salary_score": 60.0,
     "experience_score": 85.0,
+    "freshness_score": 100.0,
     "matching_skills": ["Python", "Django", "PostgreSQL"],
-    "missing_skills": ["Go", "Rust"],
+    "missing_skills": ["Go"],
+    "related_skills": ["Flask"],
     "weights": {
-      "skills": 0.40,
+      "skills": 0.35,
       "title": 0.20,
       "location": 0.10,
       "salary": 0.10,
-      "experience": 0.20
+      "experience": 0.15,
+      "freshness": 0.10
     }
   },
   "analysis": "Strong match based on skills...",
@@ -277,5 +381,6 @@ User + Job
 | `backend/app/services/matching.py` | Core matching logic |
 | `backend/app/services/llm.py` | LLM extraction functions |
 | `backend/app/utils/skill_aliases.py` | Skill normalization & aliases |
+| `backend/app/utils/skill_clusters.py` | Semantic skill clustering (NEW) |
 | `backend/app/models/match.py` | Match database model |
 | `backend/app/routers/matches.py` | API endpoints |

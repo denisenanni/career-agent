@@ -115,16 +115,23 @@ async def list_matches(
         query = query.filter(Match.score <= max_score)
 
     if status:
+        # If specific status requested, show only that status
         query = query.filter(Match.status == status)
+    else:
+        # By default, exclude hidden and rejected matches
+        query = query.filter(~Match.status.in_(["hidden", "rejected"]))
 
     # Get total count (without eager loading for efficiency)
-    total = db.query(Match).filter(Match.user_id == current_user.id).filter(
-        Match.score >= min_score if min_score is not None else True
-    ).filter(
-        Match.score <= max_score if max_score is not None else True
-    ).filter(
-        Match.status == status if status else True
-    ).count()
+    count_query = db.query(Match).filter(Match.user_id == current_user.id)
+    if min_score is not None:
+        count_query = count_query.filter(Match.score >= min_score)
+    if max_score is not None:
+        count_query = count_query.filter(Match.score <= max_score)
+    if status:
+        count_query = count_query.filter(Match.status == status)
+    else:
+        count_query = count_query.filter(~Match.status.in_(["hidden", "rejected"]))
+    total = count_query.count()
 
     # Get paginated results, ordered by score
     matches = query.order_by(Match.score.desc()).limit(limit).offset(offset).all()
