@@ -1,13 +1,13 @@
 """
 Profile router - user profile management and CV upload
 """
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status, Request
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status, Request, BackgroundTasks
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from app.database import get_db
+from app.database import get_db, get_db_session
 from app.models.user import User
 from app.dependencies.auth import get_current_user, invalidate_user_cache
 from app.schemas.profile import ProfileUpdate, CVUploadResponse, ProfileResponse, ParsedCVUpdate
@@ -20,6 +20,35 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address, enabled=settings.rate_limit_enabled)
+
+
+async def run_user_matching(user_id: int) -> None:
+    """
+    Background task to run matching for a user against all jobs.
+
+    Called after CV upload to automatically generate matches.
+    """
+    from app.services.matching import match_user_with_all_jobs
+
+    logger.info(f"Starting background matching for user {user_id}")
+
+    try:
+        with get_db_session() as db:
+            user = db.query(User).filter(User.id == user_id).first()
+
+            if not user:
+                logger.warning(f"User {user_id} not found for background matching")
+                return
+
+            if not user.cv_text:
+                logger.warning(f"User {user_id} has no CV text for matching")
+                return
+
+            matches = await match_user_with_all_jobs(db, user, min_score=60.0)
+            logger.info(f"Background matching completed for user {user_id}: {len(matches)} matches created/updated")
+
+    except Exception as e:
+        logger.error(f"Background matching failed for user {user_id}: {e}", exc_info=True)
 
 
 @router.get("", response_model=ProfileResponse)
@@ -102,6 +131,7 @@ async def update_profile(
 @limiter.limit("5/hour")  # Limit to 5 CV uploads per hour per IP
 async def upload_cv(
     request: Request,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -199,13 +229,17 @@ async def upload_cv(
         # Invalidate user cache to ensure fresh data on next request
         invalidate_user_cache(user.id)
 
+        # Queue background job to match user against all jobs
+        background_tasks.add_task(run_user_matching, user.id)
+        logger.info(f"Queued background matching for user {user.id} after CV upload")
+
         return CVUploadResponse(
             filename=file.filename,
             file_size=file_size,
             content_type=file.content_type or "application/octet-stream",
             cv_text_length=len(cv_text),
             uploaded_at=user.cv_uploaded_at,
-            message=f"CV uploaded successfully. Extracted {len(cv_text)} characters of text." +
+            message=f"CV uploaded successfully. Extracted {len(cv_text)} characters of text. Matching jobs in background." +
                     (f" Parsed with Claude Haiku: {parsed_data.get('name', 'Unknown')}" if parsed_data else " (LLM parsing unavailable)")
         )
 
