@@ -52,6 +52,23 @@ class AllowedEmailsListResponse(BaseModel):
     total: int
 
 
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    full_name: str | None
+    is_active: bool
+    is_admin: bool
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
+
+class UsersListResponse(BaseModel):
+    users: List[UserResponse]
+    total: int
+
+
 @router.post("/allowlist", response_model=AllowedEmailResponse, status_code=status.HTTP_201_CREATED)
 async def add_allowed_email(
     email_data: AddAllowedEmailRequest,
@@ -161,6 +178,38 @@ async def remove_allowed_email(
     logger.info(f"Admin {admin_user.email} removed {email_lower} from allowlist")
 
     return None
+
+
+# =============================================================================
+# User Management Endpoints
+# =============================================================================
+
+@router.get("/users", response_model=UsersListResponse)
+async def list_users(
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user)
+):
+    """
+    List all registered users (admin only)
+
+    Returns list of all users with basic profile info, ordered by most recent first.
+    """
+    users = db.query(User).order_by(User.created_at.desc()).all()
+
+    return UsersListResponse(
+        users=[
+            UserResponse(
+                id=u.id,
+                email=u.email,
+                full_name=u.full_name,
+                is_active=u.is_active,
+                is_admin=u.is_admin,
+                created_at=u.created_at.isoformat()
+            )
+            for u in users
+        ],
+        total=len(users)
+    )
 
 
 # =============================================================================

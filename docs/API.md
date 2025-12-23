@@ -1146,6 +1146,52 @@ Reset cache hit/miss counters (does NOT clear cached data).
 
 ---
 
+### List Users
+
+Get all registered users (newest first).
+
+**Endpoint:** `GET /api/admin/users`
+**Authentication:** Required (Admin only)
+
+**Response:** `200 OK`
+```json
+{
+  "users": [
+    {
+      "id": 3,
+      "email": "newuser@example.com",
+      "full_name": "New User",
+      "is_active": true,
+      "is_admin": false,
+      "created_at": "2024-12-20T10:00:00Z"
+    },
+    {
+      "id": 2,
+      "email": "user2@example.com",
+      "full_name": "User Two",
+      "is_active": true,
+      "is_admin": false,
+      "created_at": "2024-12-18T10:00:00Z"
+    },
+    {
+      "id": 1,
+      "email": "admin@example.com",
+      "full_name": "Admin User",
+      "is_active": true,
+      "is_admin": true,
+      "created_at": "2024-12-15T10:00:00Z"
+    }
+  ],
+  "total": 3
+}
+```
+
+**Errors:**
+- `401 Unauthorized` - Not authenticated
+- `403 Forbidden` - Not an admin user
+
+---
+
 ### Add Email to Allowlist
 
 Add an email to the registration allowlist (when REGISTRATION_MODE=allowlist).
