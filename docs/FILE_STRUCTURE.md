@@ -299,7 +299,7 @@ VITE_API_URL=http://localhost:8000
 - Custom `TSVectorType` handles PostgreSQL/SQLite differences
 - Each test gets isolated database session
 
-**Coverage:** 60% overall, 75%+ on critical services
+**Coverage:** 89% overall
 
 ### Frontend Tests
 
@@ -312,7 +312,7 @@ VITE_API_URL=http://localhost:8000
 - React Testing Library (component testing)
 - jsdom (browser environment simulation)
 
-**Coverage:** Basic coverage of key components (JobCard, ProtectedRoute)
+**Coverage:** 197 tests covering components, hooks, and API clients
 
 ---
 
@@ -371,12 +371,3 @@ VITE_API_URL=http://localhost:8000
 | PostgreSQL | 5432 |
 | Redis | 6379 |
 
----
-
-## Recent Changes
-
-- **2025-12-18:** Added `custom_skills` table, Vitest test setup, TSVectorType for cross-DB compatibility
-- **2025-12-17:** Added composite indexes on matches, skill autocomplete modal
-- **2025-12-16:** Added full-text search with PostgreSQL TSVECTOR + GIN index
-- **2025-12-13:** Added scrape_logs and skill_analysis tables
-- **2025-12-12:** Initial migration with users, jobs, matches tables

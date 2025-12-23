@@ -231,11 +231,15 @@ See **[SCHEMA.md](./SCHEMA.md)** for complete database schema documentation.
    - ~500 jobs per scrape
    - Tags extracted for skill matching
 
-2. **WeWorkRemotely** (planned)
-   - HTML scraping with BeautifulSoup
-   - Moderate difficulty
+2. **WeWorkRemotely** (implemented)
+   - XML feed parsing with defusedxml
+   - No authentication required
 
-3. **LinkedIn** (future/stretch goal)
+3. **HackerNews** (implemented)
+   - Monthly "Who is Hiring" threads
+   - HTML parsing with BeautifulSoup
+
+4. **LinkedIn** (future/stretch goal)
    - Requires authentication
    - High difficulty (anti-scraping measures)
 

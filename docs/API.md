@@ -1374,9 +1374,10 @@ All error responses follow this format:
 
 | Endpoint | Limit |
 |----------|-------|
-| `POST /api/profile/cv` | 5 requests/hour per IP |
+| `POST /auth/register` | 5 requests/hour per IP |
+| `POST /auth/login` | 10 requests/minute per IP |
+| `POST /api/profile/cv` | 10 requests/hour per IP |
 | `POST /api/user-jobs/parse` | 10 requests/hour per IP |
-| All other endpoints | No limit (planned: 100 req/min per user) |
 
 ---
 
