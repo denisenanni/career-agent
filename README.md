@@ -1,69 +1,73 @@
 # Career Agent
 
-An AI-powered job hunting assistant that:
-1. Scrapes job boards for relevant postings
-2. Matches jobs against your CV and preferences
-3. Generates tailored cover letters and CV highlights
-4. Tracks applications and provides insights
+An AI-powered job hunting assistant that automates job discovery, matching, and application preparation.
 
 **Repository:** https://github.com/denisenanni/career-agent
 **Live App:** https://career-agent-dev.vercel.app/
 
+## Overview
+
+Career Agent helps job seekers by:
+
+1. Scraping job boards for relevant postings
+2. Matching jobs against your CV and preferences using AI
+3. Generating tailored cover letters and CV highlights
+4. Tracking applications and providing market insights
+
 ## Features
 
-- 🔍 **Job Scraping** - Automatically scrapes RemoteOK, WeWorkRemotely, and more
-- 📄 **CV Parsing** - Upload your CV and extract skills/experience with Claude AI
-- 🎯 **Smart Matching** - AI-powered job ranking based on skills, experience, and preferences
-- ✍️ **Application Generation** - Generate personalized cover letters and tailored CV highlights
-- 📊 **Career Insights** - Market analysis and skill recommendations based on job trends
-- 📋 **Application Tracking** - Track your application status (matched, interested, applied)
+- **Job Scraping** - Automatically aggregates jobs from RemoteOK, WeWorkRemotely, HackerNews, and more
+- **CV Parsing** - Upload PDF/DOCX/TXT and extract skills, experience, and contact info using Claude AI
+- **Smart Matching** - AI-powered job ranking based on skills overlap, experience level, salary, and preferences
+- **Application Materials** - Generate personalized cover letters and tailored CV bullet points per job
+- **Market Analysis** - Skill demand trends and recommendations based on current job postings
+- **Application Tracking** - Track status progression (matched, interested, applied, hidden)
 
 ## Tech Stack
 
-- **Frontend**: React + TypeScript + Vite + Tailwind
-- **Backend**: Python FastAPI
-- **Database**: PostgreSQL 17 (Docker for local, Railway for production)
-- **Cache**: Redis (Docker for local, Railway for production)
-- **LLM**: Anthropic Claude (Haiku for extraction, Sonnet for generation)
-- **Scraping**: httpx + BeautifulSoup
-- **Infrastructure**: Docker Compose (local), Terraform + Railway + Vercel (production)
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS |
+| Backend | Python 3.11+, FastAPI, SQLAlchemy, Pydantic |
+| Database | PostgreSQL 17 |
+| Cache | Redis 7 |
+| AI/LLM | Anthropic Claude (Haiku for extraction, Sonnet for generation) |
+| Scraping | httpx, BeautifulSoup, defusedxml |
+| Infrastructure | Docker Compose (local), Terraform, Railway, Vercel |
+| Testing | pytest (backend), Vitest (frontend) |
 
 ## Quick Start
 
 ```bash
-# 1. Install dependencies
+# 1. Clone and install
+git clone https://github.com/denisenanni/career-agent.git
+cd career-agent
 yarn install
 
-# 2. Start Docker services (PostgreSQL + Redis)
+# 2. Start database services
 docker-compose up -d
 
-# 3. Run database migrations
+# 3. Run migrations
 yarn db:migrate
 
-# 4. Start dev servers (frontend + backend)
+# 4. Start development servers
 yarn dev
 ```
 
-Visit http://localhost:5173 and register an account!
+Access the app at http://localhost:5173
 
-## Getting Started
-
-### Prerequisites
+## Prerequisites
 
 - Node.js 18+
 - Python 3.11+
-- Docker & Docker Compose
+- Docker and Docker Compose
 - Yarn
 
-### Local Development
+## Local Development
 
-#### 1. Clone and Install Dependencies
+### Installation
 
 ```bash
-# Clone the repo
-git clone https://github.com/denisenanni/career-agent.git
-cd career-agent
-
 # Install frontend dependencies
 yarn install
 
@@ -75,239 +79,164 @@ pip install -r requirements.txt
 cd ..
 ```
 
-#### 2. Configure Environment Variables
+### Configuration
 
-The backend `.env` file is already configured at `backend/.env` with:
+The backend `.env` file at `backend/.env` is pre-configured for local development:
+
 - PostgreSQL: `localhost:5432`
 - Redis: `localhost:6379`
-- Database credentials: `career_agent` / `career_agent_dev`
+- Database: `career_agent` / `career_agent_dev`
 
-If you need to change these, edit `backend/.env`.
+For production, you'll need to add:
+- `ANTHROPIC_API_KEY` - From https://console.anthropic.com/
+- `JWT_SECRET` - Generate with `openssl rand -base64 32`
 
-#### 3. Start Database Services
-
-**IMPORTANT: You must start Docker containers before running the backend!**
+### Starting Services
 
 ```bash
-# Start PostgreSQL and Redis
+# Start PostgreSQL and Redis containers
 docker-compose up -d
 
 # Verify containers are running
 docker-compose ps
 
-# You should see:
-# career-agent-db     postgres:17-alpine     Up
-# career-agent-redis  redis:7-alpine         Up
-```
-
-#### 4. Run Database Migrations
-
-```bash
-# Create database tables
+# Run database migrations
 yarn db:migrate
 
-# OR manually:
-cd backend
-source .venv/bin/activate
-alembic upgrade head
-cd ..
-```
-
-#### 5. Start Development Servers
-
-**Option A - Start both frontend and backend:**
-```bash
+# Start both frontend and backend
 yarn dev
 ```
 
-**Option B - Start separately:**
-```bash
-# Terminal 1 - Backend
-yarn backend:dev
+### Access Points
 
-# Terminal 2 - Frontend
-yarn frontend:dev
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:5173 |
+| Backend API | http://localhost:8000 |
+| API Documentation | http://localhost:8000/docs |
+| Health Check | http://localhost:8000/health |
+
+## Testing
+
+```bash
+# Backend tests
+cd backend
+source .venv/bin/activate
+pytest
+
+# Frontend tests
+cd frontend
+yarn test
 ```
 
-#### 6. Access the Application
+## Project Structure
 
-- **Frontend**: http://localhost:5173
-- **Backend**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/health
+```
+career-agent/
+├── frontend/          # React + TypeScript application
+├── backend/           # FastAPI application
+│   ├── app/           # Application code (routers, models, services)
+│   ├── migrations/    # Alembic database migrations
+│   └── tests/         # pytest test suites
+├── scraping/          # Job board scrapers
+├── infrastructure/    # Terraform configurations
+├── docs/              # Project documentation
+└── docker-compose.yml # Local development services
+```
 
-### Troubleshooting
+## API Rate Limits
 
-#### Database Connection Errors
+The following endpoints have rate limits to prevent abuse:
 
-If you see `Connection refused` or `password authentication failed`:
+| Endpoint | Limit |
+|----------|-------|
+| POST /api/auth/register | 5/hour |
+| POST /api/auth/login | 10/minute |
+| POST /api/profile/cv | 10/hour |
+| POST /api/user-jobs/parse | 10/hour |
 
-1. **Check Docker is running:**
+## Deployment
+
+### Infrastructure (Terraform)
+
+Deploy to Railway (backend, PostgreSQL, Redis) and Vercel (frontend):
+
 ```bash
+cd infrastructure/terraform
+cp terraform.tfvars.example dev.tfvars
+# Edit dev.tfvars with your tokens and secrets
+
+terraform init
+terraform plan -var-file=dev.tfvars
+terraform apply -var-file=dev.tfvars
+```
+
+### Manual Deployment
+
+**Backend (Railway):**
+```bash
+railway login
+railway link
+railway up
+```
+
+**Frontend (Vercel):**
+- Automatic deployment on push to `main` branch
+- Manual: `vercel --prod`
+
+### Required Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| DATABASE_URL | PostgreSQL connection string (auto-injected by Railway) |
+| REDIS_URL | Redis connection string (auto-injected by Railway) |
+| ANTHROPIC_API_KEY | Anthropic API key for Claude |
+| JWT_SECRET | Secret key for JWT token signing |
+| ENVIRONMENT | `development` or `production` |
+
+## Documentation
+
+- [ROADMAP.md](docs/ROADMAP.md) - Project phases and progress
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System design and data flows
+- [API.md](docs/API.md) - Complete API reference
+- [SCHEMA.md](docs/SCHEMA.md) - Database schema documentation
+- [FILE_STRUCTURE.md](docs/FILE_STRUCTURE.md) - Directory organization
+- [DEV_NOTES.md](docs/DEV_NOTES.md) - Development conventions and tips
+
+## Troubleshooting
+
+### Database Connection Issues
+
+```bash
+# Check if containers are running
 docker ps
-# Should show career-agent-db and career-agent-redis
-```
 
-2. **Start containers if not running:**
-```bash
-docker-compose up -d
-```
-
-3. **Check container logs:**
-```bash
+# View container logs
 docker-compose logs postgres
 docker-compose logs redis
-```
 
-4. **Verify connection:**
-```bash
-# Test PostgreSQL connection
-docker exec -it career-agent-db psql -U career_agent -d career_agent -c "SELECT 1;"
-
-# Test Redis connection
-docker exec -it career-agent-redis redis-cli ping
-```
-
-5. **Restart everything:**
-```bash
+# Restart services
 docker-compose down
 docker-compose up -d
 yarn db:migrate
-yarn backend:dev
 ```
 
-#### Port Already in Use
-
-If ports 5432, 6379, 8000, or 5173 are in use:
+### Port Conflicts
 
 ```bash
-# Find and kill process using port
+# Kill process on specific port
 lsof -ti:8000 | xargs kill -9  # Backend
 lsof -ti:5173 | xargs kill -9  # Frontend
-lsof -ti:5432 | xargs kill -9  # PostgreSQL
 ```
 
-#### Migration Errors
-
-If migrations fail:
+### Reset Database
 
 ```bash
-# Reset database (WARNING: deletes all data)
+# Warning: This deletes all data
 docker-compose down -v
 docker-compose up -d
 yarn db:migrate
 ```
-
-### Testing the Scraper
-
-```bash
-cd scraping
-source ../backend/.venv/bin/activate
-python -m scrapers.remoteok
-```
-
-### Common Commands
-
-```bash
-# Local development
-docker-compose up -d          # Start Postgres + Redis
-yarn install                  # Install frontend deps
-yarn backend:setup            # Set up Python venv
-yarn dev                      # Start frontend + backend
-
-# Database
-yarn db:migrate               # Run migrations
-alembic revision --autogenerate -m "description"  # Create migration
-
-# Testing
-cd backend && pytest          # Run backend tests
-cd frontend && yarn test      # Run frontend tests
-
-# Scraping
-cd scraping
-python -m scrapers.remoteok   # Test RemoteOK scraper
-```
-
----
-
-## Deployment
-
-### Production Infrastructure (Terraform)
-
-Deploy to Railway (backend + database) and Vercel (frontend):
-
-```bash
-cd infrastructure/terraform
-
-# Copy and fill in variables
-cp terraform.tfvars.example dev.tfvars
-# Add: RAILWAY_TOKEN, VERCEL_TOKEN, ANTHROPIC_API_KEY, JWT_SECRET
-
-# Initialize
-terraform init
-
-# Plan
-terraform plan -var-file=dev.tfvars
-
-# Apply
-terraform apply -var-file=dev.tfvars
-```
-
-**What gets deployed:**
-- Railway Project with PostgreSQL, Redis, and FastAPI backend
-- Vercel Project with React frontend
-- Environment variables configured automatically
-
-### Manual Deployment
-
-**Backend (Railway)**:
-```bash
-# Install Railway CLI
-npm install -g @railway/cli
-
-# Login and link project
-railway login
-railway link
-
-# Deploy
-railway up
-```
-
-**Frontend (Vercel)**:
-- Push to `main` branch - auto deploys via Vercel GitHub integration
-- Or deploy manually: `vercel --prod`
-
-### Environment Variables
-
-**Required for Production:**
-- `DATABASE_URL` - Auto-injected by Railway PostgreSQL
-- `REDIS_URL` - Auto-injected by Railway Redis
-- `ANTHROPIC_API_KEY` - Get from https://console.anthropic.com/
-- `JWT_SECRET` - Generate with `openssl rand -base64 32`
-- `ENVIRONMENT` - Set to `production`
-
-## Project Structure
-
-Monorepo with separate frontend, backend, scraping scripts, and infrastructure code.
-
-**Main Directories:**
-- **`frontend/`** - React + TypeScript + Vite (UI components, pages, API clients)
-- **`backend/`** - Python FastAPI (API routers, models, services, migrations, tests)
-- **`scraping/`** - Job board scrapers (RemoteOK, WeWorkRemotely, etc.)
-- **`infrastructure/`** - Terraform configuration for Railway + Vercel
-- **`docs/`** - Complete project documentation
-- **`docker-compose.yml`** - PostgreSQL + Redis for local development
-
-See **[FILE_STRUCTURE.md](docs/FILE_STRUCTURE.md)** for complete directory trees with detailed file-by-file descriptions.
-
-## Documentation
-
-- **[ROADMAP.md](docs/ROADMAP.md)** - Project phases, implementation plan, and progress tracking
-- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture, components, data flows, infrastructure, and costs
-- **[API.md](docs/API.md)** - Complete API reference with examples and authentication
-- **[SCHEMA.md](docs/SCHEMA.md)** - Database schema, tables, indexes, and relationships
-- **[FILE_STRUCTURE.md](docs/FILE_STRUCTURE.md)** - Project directory structure and organization
-- **[DEV_NOTES.md](docs/DEV_NOTES.md)** - Development notes, conventions, debugging tips, and future features
 
 ## License
 
