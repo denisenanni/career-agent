@@ -34,6 +34,8 @@ export function useAutoSave<T>({
 
   // Track if this is the initial render
   const isInitialMount = useRef(true)
+  // Track if enabled has ever been true (to capture baseline when first enabled)
+  const hasBeenEnabled = useRef(enabled)
   // Track the latest data for saving
   const dataRef = useRef(data)
   // Track serialized data for deep comparison
@@ -101,6 +103,13 @@ export function useAutoSave<T>({
     }
 
     if (!enabled) return
+
+    // When enabled first becomes true, capture current data as baseline (don't save)
+    if (!hasBeenEnabled.current) {
+      hasBeenEnabled.current = true
+      dataStringRef.current = dataString
+      return
+    }
 
     // Skip if data hasn't actually changed (deep comparison)
     if (dataString === dataStringRef.current) return
