@@ -1192,6 +1192,46 @@ Get all registered users (newest first).
 
 ---
 
+### Update User
+
+Update user properties (activate/deactivate, grant/revoke admin).
+
+**Endpoint:** `PUT /api/admin/users/{user_id}`
+**Authentication:** Required (Admin only)
+
+**Request Body:**
+```json
+{
+  "is_active": false,
+  "is_admin": true
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "id": 2,
+  "email": "user2@example.com",
+  "full_name": "User Two",
+  "is_active": false,
+  "is_admin": true,
+  "created_at": "2024-12-18T10:00:00Z"
+}
+```
+
+**Errors:**
+- `400 Bad Request` - Cannot modify your own account
+- `401 Unauthorized` - Not authenticated
+- `403 Forbidden` - Not an admin user
+- `404 Not Found` - User not found
+
+**Notes:**
+- All fields are optional (partial updates supported)
+- Admin cannot modify their own account via this endpoint
+- User cache is invalidated immediately after update
+
+---
+
 ### Add Email to Allowlist
 
 Add an email to the registration allowlist (when REGISTRATION_MODE=allowlist).
@@ -1335,6 +1375,7 @@ All error responses follow this format:
 | Endpoint | Limit |
 |----------|-------|
 | `POST /api/profile/cv` | 5 requests/hour per IP |
+| `POST /api/user-jobs/parse` | 10 requests/hour per IP |
 | All other endpoints | No limit (planned: 100 req/min per user) |
 
 ---

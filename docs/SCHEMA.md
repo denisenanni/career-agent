@@ -292,6 +292,74 @@ CREATE INDEX idx_custom_skills_usage_count ON custom_skills(usage_count DESC);
 
 ---
 
+### 7. User Jobs
+
+Stores user-submitted job postings (jobs users paste/submit manually).
+
+```sql
+CREATE TABLE user_jobs (
+  id SERIAL PRIMARY KEY,
+
+  -- Relationships
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+  job_entry_id INTEGER REFERENCES jobs(id) ON DELETE SET NULL,  -- Link to jobs table for matching
+
+  -- Job details
+  title VARCHAR(255) NOT NULL,
+  company VARCHAR(255),
+  description TEXT NOT NULL,
+  url VARCHAR(500),
+  source VARCHAR(50) DEFAULT 'user_submitted',
+
+  -- Extracted fields (same as scraped jobs)
+  tags JSONB DEFAULT '[]',
+  salary_min INTEGER,
+  salary_max INTEGER,
+  salary_currency VARCHAR(10) DEFAULT 'USD',
+  location VARCHAR(255),
+  remote_type VARCHAR(50),            -- full, hybrid, onsite
+  job_type VARCHAR(50),               -- permanent, contract, part-time
+
+  -- Timestamps
+  created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+
+  -- Constraints
+  CONSTRAINT uq_user_jobs_user_company_title UNIQUE (user_id, company, title)
+);
+
+CREATE INDEX idx_user_jobs_user_id ON user_jobs(user_id);
+CREATE INDEX idx_user_jobs_job_entry_id ON user_jobs(job_entry_id);
+```
+
+**Notes:**
+- Allows users to paste job postings from external sources
+- `job_entry_id` links to corresponding Job entry for matching system
+- When deleted, also deletes the linked Job entry and any matches
+- Unique constraint prevents duplicate submissions per user
+- Automatically creates a match when job is submitted
+
+---
+
+### 8. Allowed Emails
+
+Stores emails allowed to register (when REGISTRATION_MODE=allowlist).
+
+```sql
+CREATE TABLE allowed_emails (
+  id SERIAL PRIMARY KEY,
+
+  email VARCHAR(255) UNIQUE NOT NULL,
+  added_by INTEGER REFERENCES users(id),
+
+  created_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX idx_allowed_emails_email ON allowed_emails(email);
+```
+
+---
+
 ## Database Triggers
 
 ### Full-Text Search Trigger (PostgreSQL only)
@@ -388,9 +456,12 @@ All migrations are version-controlled in `backend/migrations/versions/`.
 
 ### Recent Changes
 
-1. **v2024-12** - Added `TSVectorType` custom type for cross-database compatibility
-2. **v2024-12** - Added `custom_skills` table for user-contributed skills
-3. **v2024-12** - Added `cover_letter` and `cv_highlights` to matches table
-4. **v2024-12** - Added composite unique constraint on jobs (source, source_id)
-5. **v2024-11** - Added full-text search with GIN index on jobs
-6. **v2024-11** - Added composite indexes on matches for performance
+1. **v2024-12** - Added unique constraint on matches (user_id, job_id) to prevent duplicates
+2. **v2024-12** - Added `job_entry_id` column to user_jobs for cascade deletion
+3. **v2024-12** - Added `user_jobs` and `allowed_emails` tables
+4. **v2024-12** - Added `TSVectorType` custom type for cross-database compatibility
+5. **v2024-12** - Added `custom_skills` table for user-contributed skills
+6. **v2024-12** - Added `cover_letter` and `cv_highlights` to matches table
+7. **v2024-12** - Added composite unique constraint on jobs (source, source_id)
+8. **v2024-11** - Added full-text search with GIN index on jobs
+9. **v2024-11** - Added composite indexes on matches for performance
