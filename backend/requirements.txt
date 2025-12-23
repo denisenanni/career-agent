@@ -31,6 +31,9 @@ httpx==0.26.0
 # Utils
 python-dotenv==1.0.1
 
+# Security
+defusedxml==0.7.1
+
 # PDF parsing (for CV upload)
 pypdf==6.4.2
 python-docx==1.1.0

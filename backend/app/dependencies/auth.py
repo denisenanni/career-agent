@@ -4,8 +4,9 @@ Authentication dependencies for FastAPI endpoints
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from typing import Optional, Dict
+from typing import Optional, Dict, Tuple
 from datetime import datetime, timedelta, timezone
+from collections import OrderedDict
 import threading
 
 from app.database import get_db
@@ -15,19 +16,33 @@ from app.utils.auth import decode_access_token
 # HTTP Bearer token scheme
 security = HTTPBearer()
 
-# In-memory user cache to reduce DB lookups
-# Format: {user_id: (user_object, expiry_time)}
-_user_cache: Dict[int, tuple[User, datetime]] = {}
+# In-memory user cache with LRU eviction to prevent memory leaks
+# Format: OrderedDict[user_id, (user_object, expiry_time)]
+_user_cache: OrderedDict[int, Tuple[User, datetime]] = OrderedDict()
 _cache_lock = threading.Lock()
 _cache_ttl = timedelta(minutes=5)  # Cache for 5 minutes
+_cache_max_size = 1000  # Maximum number of cached users
+
+
+def _cleanup_expired_entries() -> None:
+    """Remove expired entries from cache (must be called with lock held)"""
+    now = datetime.now(timezone.utc)
+    expired_keys = [
+        user_id for user_id, (_, expiry) in _user_cache.items()
+        if now >= expiry
+    ]
+    for user_id in expired_keys:
+        del _user_cache[user_id]
 
 
 def _get_cached_user(user_id: int) -> Optional[User]:
-    """Get user from cache if not expired"""
+    """Get user from cache if not expired (LRU: moves to end on access)"""
     with _cache_lock:
         if user_id in _user_cache:
             user, expiry = _user_cache[user_id]
             if datetime.now(timezone.utc) < expiry:
+                # Move to end (most recently used)
+                _user_cache.move_to_end(user_id)
                 return user
             else:
                 # Remove expired entry
@@ -36,9 +51,25 @@ def _get_cached_user(user_id: int) -> Optional[User]:
 
 
 def _cache_user(user: User) -> None:
-    """Cache user with TTL"""
+    """Cache user with TTL and LRU eviction"""
     with _cache_lock:
-        expiry = datetime.now(timezone.utc) + _cache_ttl
+        now = datetime.now(timezone.utc)
+        expiry = now + _cache_ttl
+
+        # If already cached, update and move to end
+        if user.id in _user_cache:
+            _user_cache[user.id] = (user, expiry)
+            _user_cache.move_to_end(user.id)
+            return
+
+        # Periodically cleanup expired entries (every 100 inserts worth of space)
+        if len(_user_cache) >= _cache_max_size:
+            _cleanup_expired_entries()
+
+        # If still at max size after cleanup, remove oldest (LRU eviction)
+        while len(_user_cache) >= _cache_max_size:
+            _user_cache.popitem(last=False)  # Remove oldest
+
         _user_cache[user.id] = (user, expiry)
 
 

@@ -1,7 +1,7 @@
 """
 User Jobs router - user-submitted job postings
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, Field
@@ -10,6 +10,8 @@ import logging
 import json
 from datetime import datetime
 import uuid
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.database import get_db
 from app.models.user import User
@@ -18,9 +20,11 @@ from app.models.job import Job
 from app.dependencies.auth import get_current_user
 from app.services.llm import client as llm_client
 from app.services.matching import create_match_for_job
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address, enabled=settings.rate_limit_enabled)
 
 
 # Pydantic schemas
@@ -183,8 +187,10 @@ Return JSON only:"""
 
 
 @router.post("/parse", response_model=UserJobCreate)
+@limiter.limit("10/hour")
 async def parse_job_text(
     request: ParseJobRequest,
+    http_request: Request,  # Required for rate limiter
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -195,6 +201,8 @@ async def parse_job_text(
     - **job_text**: Raw job posting text (minimum 50 characters)
 
     Returns extracted job information ready to be saved.
+
+    Rate limited to 10 requests per hour per user.
     """
     try:
         parsed_data = parse_job_with_llm(request.job_text)
@@ -270,6 +278,11 @@ async def create_user_job(
     try:
         # Add both to database
         db.add(job_entry)
+        db.flush()  # Get job_entry.id before committing
+
+        # Link UserJob to Job entry
+        new_job.job_entry_id = job_entry.id
+
         db.add(new_job)
         db.commit()
         db.refresh(new_job)
@@ -473,20 +486,33 @@ async def delete_user_job(
 
     Returns 204 No Content on success.
     Returns 404 if job not found or doesn't belong to current user.
+
+    Note: Also deletes the corresponding Job entry and any associated matches.
     """
-    job = db.query(UserJob).filter(
+    from app.models.match import Match
+
+    user_job = db.query(UserJob).filter(
         UserJob.id == job_id,
         UserJob.user_id == current_user.id
     ).first()
 
-    if not job:
+    if not user_job:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Job not found"
         )
 
-    db.delete(job)
+    # Delete associated matches and Job entry if exists
+    if user_job.job_entry_id:
+        # Delete matches first (due to foreign key constraint)
+        db.query(Match).filter(Match.job_id == user_job.job_entry_id).delete()
+
+        # Delete the Job entry
+        db.query(Job).filter(Job.id == user_job.job_entry_id).delete()
+
+    # Delete the UserJob
+    db.delete(user_job)
     db.commit()
-    logger.info(f"User {current_user.id} deleted job {job_id}")
+    logger.info(f"User {current_user.id} deleted job {job_id} and associated entries")
 
     return None

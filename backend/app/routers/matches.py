@@ -1,7 +1,7 @@
 """
 Matches router - job matching and application generation
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from typing import Optional, List
@@ -83,11 +83,11 @@ class RegenerateResponse(BaseModel):
 
 @router.get("", response_model=MatchListResponse)
 async def list_matches(
-    min_score: Optional[float] = None,
-    max_score: Optional[float] = None,
+    min_score: Optional[float] = Query(default=None, ge=0, le=100),
+    max_score: Optional[float] = Query(default=None, ge=0, le=100),
     status: Optional[str] = None,
-    limit: int = 50,
-    offset: int = 0,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -100,9 +100,6 @@ async def list_matches(
     - **limit**: Number of results per page (default 50, max 100)
     - **offset**: Pagination offset
     """
-    # Validate limit
-    if limit > 100:
-        limit = 100
 
     # Build query with eager loading to avoid N+1 queries
     query = db.query(Match).options(joinedload(Match.job)).filter(Match.user_id == current_user.id)

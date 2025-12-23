@@ -8,7 +8,7 @@ Source: https://hnrss.org/whoishiring/jobs
 """
 
 import httpx
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 from datetime import datetime
 from typing import Optional
 from email.utils import parsedate_to_datetime

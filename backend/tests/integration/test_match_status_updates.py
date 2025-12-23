@@ -185,13 +185,32 @@ class TestMatchStatusUpdates:
 
     def test_list_matches_by_status(self, authenticated_client, test_match, db_session):
         """Test filtering matches by status"""
-        # Create additional matches with different statuses
+        # Create additional jobs and matches with different statuses
+        # (unique constraint on user_id, job_id requires different jobs)
         user = db_session.query(User).filter(User.id == test_match.user_id).first()
-        job = db_session.query(Job).filter(Job.id == test_match.job_id).first()
+
+        job2 = Job(
+            source="test",
+            source_id="test-job-interested",
+            url="https://example.com/interested",
+            title="Test Job 2",
+            company="Test Co",
+            description="Test job for interested status",
+        )
+        job3 = Job(
+            source="test",
+            source_id="test-job-applied",
+            url="https://example.com/applied",
+            title="Test Job 3",
+            company="Test Co",
+            description="Test job for applied status",
+        )
+        db_session.add_all([job2, job3])
+        db_session.flush()
 
         match2 = Match(
             user_id=user.id,
-            job_id=job.id,
+            job_id=job2.id,
             score=75.0,
             status="interested",
             analysis="Another match",
@@ -199,7 +218,7 @@ class TestMatchStatusUpdates:
         )
         match3 = Match(
             user_id=user.id,
-            job_id=job.id,
+            job_id=job3.id,
             score=65.0,
             status="applied",
             analysis="Third match",
@@ -256,7 +275,7 @@ class TestMatchStatusUpdates:
         assert response.json()["total"] == initial_count
 
     def test_hidden_match_filtered_by_status(self, authenticated_client, test_match):
-        """Test that hidden matches can be filtered by status"""
+        """Test that hidden matches are excluded by default but can be filtered explicitly"""
         # Hide the match
         response = authenticated_client.put(
             f"/api/matches/{test_match.id}/status",
@@ -264,13 +283,13 @@ class TestMatchStatusUpdates:
         )
         assert response.status_code == 200
 
-        # Get all matches - hidden match should still appear (no filtering by default)
+        # Get all matches - hidden matches are EXCLUDED by default
         response = authenticated_client.get("/api/matches")
         all_matches = response.json()["matches"]
         match_ids = [m["id"] for m in all_matches]
-        assert test_match.id in match_ids
+        assert test_match.id not in match_ids  # Hidden match should NOT appear by default
 
-        # When filtering by hidden status, the hidden match should appear
+        # When filtering by hidden status explicitly, the hidden match should appear
         response = authenticated_client.get("/api/matches?status=hidden")
         hidden_matches = response.json()["matches"]
         hidden_match_ids = [m["id"] for m in hidden_matches]

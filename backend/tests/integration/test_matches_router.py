@@ -233,12 +233,13 @@ class TestMatchesEndpoints:
         assert data["total"] == 1
 
     def test_list_matches_limit_exceeds_max(self, authenticated_client):
-        """Test that limit is capped at 100"""
+        """Test that limit > 100 returns validation error"""
         response = authenticated_client.get("/api/matches?limit=200")
 
-        assert response.status_code == 200
+        # Now returns 422 validation error instead of silently capping
+        assert response.status_code == 422
         data = response.json()
-        assert data["limit"] == 100  # Should be capped
+        assert "detail" in data
 
     def test_update_match_status_sets_applied_at(self, authenticated_client, sample_match, db_session):
         """Test that updating status to 'applied' sets applied_at timestamp"""

@@ -86,3 +86,126 @@ class TestListUsersEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["total"] == len(data["users"])
+
+
+class TestUpdateUserEndpoint:
+    """Test PUT /api/admin/users/{user_id} endpoint"""
+
+    def test_update_user_requires_auth(self, client, db_session):
+        """Test that unauthenticated users cannot update users"""
+        # Create a test user
+        user = User(
+            email="target@example.com",
+            hashed_password=get_password_hash("password123"),
+            full_name="Target User"
+        )
+        db_session.add(user)
+        db_session.commit()
+
+        response = client.put(f"/api/admin/users/{user.id}", json={"is_active": False})
+        assert response.status_code in [401, 403]
+
+    def test_update_user_requires_admin(self, authenticated_client, db_session):
+        """Test that non-admin users cannot update users"""
+        # Create a test user
+        user = User(
+            email="target2@example.com",
+            hashed_password=get_password_hash("password123"),
+            full_name="Target User 2"
+        )
+        db_session.add(user)
+        db_session.commit()
+
+        response = authenticated_client.put(f"/api/admin/users/{user.id}", json={"is_active": False})
+        assert response.status_code == 403
+        assert "Admin access required" in response.json()["detail"]
+
+    def test_update_user_is_active(self, admin_client, db_session):
+        """Test that admin can deactivate a user"""
+        # Create a test user
+        user = User(
+            email="target3@example.com",
+            hashed_password=get_password_hash("password123"),
+            full_name="Target User 3",
+            is_active=True
+        )
+        db_session.add(user)
+        db_session.commit()
+
+        response = admin_client.put(f"/api/admin/users/{user.id}", json={"is_active": False})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["is_active"] is False
+
+        # Verify in database
+        db_session.refresh(user)
+        assert user.is_active is False
+
+    def test_update_user_is_admin(self, admin_client, db_session):
+        """Test that admin can grant admin privileges to a user"""
+        # Create a test user
+        user = User(
+            email="target4@example.com",
+            hashed_password=get_password_hash("password123"),
+            full_name="Target User 4",
+            is_admin=False
+        )
+        db_session.add(user)
+        db_session.commit()
+
+        response = admin_client.put(f"/api/admin/users/{user.id}", json={"is_admin": True})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["is_admin"] is True
+
+        # Verify in database
+        db_session.refresh(user)
+        assert user.is_admin is True
+
+    def test_update_user_not_found(self, admin_client):
+        """Test that updating non-existent user returns 404"""
+        response = admin_client.put("/api/admin/users/99999", json={"is_active": False})
+        assert response.status_code == 404
+        assert "User not found" in response.json()["detail"]
+
+    def test_admin_cannot_update_self(self, admin_client, db_session):
+        """Test that admin cannot modify their own account via admin endpoint"""
+        # Get the admin user (email is admin@example.com based on the fixture)
+        admin_user = db_session.query(User).filter(User.email == "admin@example.com").first()
+        assert admin_user is not None
+
+        response = admin_client.put(f"/api/admin/users/{admin_user.id}", json={"is_active": False})
+        assert response.status_code == 400
+        assert "Cannot modify your own account" in response.json()["detail"]
+
+    def test_update_user_cache_invalidation(self, admin_client, db_session):
+        """Test that user cache is invalidated after admin update"""
+        from app.dependencies.auth import _get_cached_user, _cache_user
+
+        # Create and cache a user
+        user = User(
+            email="target5@example.com",
+            hashed_password=get_password_hash("password123"),
+            full_name="Target User 5",
+            is_active=True
+        )
+        db_session.add(user)
+        db_session.commit()
+
+        # Cache the user
+        _cache_user(user)
+
+        # Verify user is cached
+        cached = _get_cached_user(user.id)
+        assert cached is not None
+        assert cached.is_active is True
+
+        # Update user via admin endpoint
+        response = admin_client.put(f"/api/admin/users/{user.id}", json={"is_active": False})
+        assert response.status_code == 200
+
+        # Cache should be invalidated
+        cached_after = _get_cached_user(user.id)
+        assert cached_after is None

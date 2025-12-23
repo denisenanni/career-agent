@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, Float, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, Text, Float, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.models import Base
@@ -6,6 +6,9 @@ from app.models import Base
 
 class Match(Base):
     __tablename__ = "matches"
+    __table_args__ = (
+        UniqueConstraint('user_id', 'job_id', name='uq_match_user_job'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
 

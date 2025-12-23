@@ -4,7 +4,7 @@ Unit tests for job scrapers - comprehensive coverage
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
 from datetime import datetime, timezone
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 import httpx
 
 
@@ -1445,7 +1445,7 @@ class TestScraperEdgeCases:
     def test_weworkremotely_normalize_job_invalid_pubdate(self):
         """Test normalization with invalid pubDate"""
         from app.scrapers.weworkremotely import normalize_job
-        import xml.etree.ElementTree as ET
+        import defusedxml.ElementTree as ET
 
         xml_str = """
         <item>
@@ -1473,7 +1473,7 @@ class TestScraperEdgeCases:
     def test_hackernews_normalize_job_no_source_id_in_url(self):
         """Test normalization when URL has no item ID"""
         from app.scrapers.hackernews import normalize_job
-        import xml.etree.ElementTree as ET
+        import defusedxml.ElementTree as ET
 
         xml_str = """
         <item xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -1493,7 +1493,7 @@ Description here</description>
     def test_hackernews_normalize_job_no_creator(self):
         """Test normalization when no dc:creator element"""
         from app.scrapers.hackernews import normalize_job
-        import xml.etree.ElementTree as ET
+        import defusedxml.ElementTree as ET
 
         xml_str = """
         <item>
@@ -1513,7 +1513,7 @@ More text</description>
     def test_hackernews_normalize_job_invalid_pubdate(self):
         """Test normalization with invalid pubDate"""
         from app.scrapers.hackernews import normalize_job
-        import xml.etree.ElementTree as ET
+        import defusedxml.ElementTree as ET
 
         xml_str = """
         <item xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -1534,7 +1534,7 @@ Desc</description>
     def test_hackernews_normalize_job_on_site_remote_type(self):
         """Test normalization with on-site job detection"""
         from app.scrapers.hackernews import normalize_job
-        import xml.etree.ElementTree as ET
+        import defusedxml.ElementTree as ET
 
         xml_str = """
         <item xmlns:dc="http://purl.org/dc/elements/1.1/">

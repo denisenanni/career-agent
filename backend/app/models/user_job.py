@@ -11,6 +11,8 @@ class UserJob(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Link to the corresponding Job entry (for matching system)
+    job_entry_id = Column(Integer, ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True, index=True)
 
     # Job details
     title = Column(String(255), nullable=False)

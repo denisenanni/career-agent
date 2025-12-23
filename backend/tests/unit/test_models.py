@@ -234,15 +234,36 @@ class TestMatchModel:
         assert "Dear Hiring Manager" in match.cover_letter
         assert "Python expert" in match.cv_highlights
 
-    def test_match_score_range(self, db_session: Session, sample_user, sample_job):
+    def test_match_score_range(self, db_session: Session, sample_user):
         """Test that match score can be 0-100"""
+        from app.models import Job
+
+        # Create two different jobs for testing different scores (unique constraint on user_id, job_id)
+        job_min = Job(
+            source="test",
+            source_id="test-score-min",
+            url="https://example.com/min",
+            title="Test Job Min",
+            company="Test Co",
+            description="Test",
+        )
+        job_max = Job(
+            source="test",
+            source_id="test-score-max",
+            url="https://example.com/max",
+            title="Test Job Max",
+            company="Test Co",
+            description="Test",
+        )
+        db_session.add_all([job_min, job_max])
+        db_session.flush()
+
         # Test minimum score
-        match_min = Match(user_id=sample_user.id, job_id=sample_job.id, score=0.0)
+        match_min = Match(user_id=sample_user.id, job_id=job_min.id, score=0.0)
         db_session.add(match_min)
-        db_session.commit()
 
         # Test maximum score
-        match_max = Match(user_id=sample_user.id, job_id=sample_job.id, score=100.0)
+        match_max = Match(user_id=sample_user.id, job_id=job_max.id, score=100.0)
         db_session.add(match_max)
         db_session.commit()
 
@@ -283,17 +304,22 @@ class TestMatchModel:
         assert match.status == "matched"
 
     def test_match_status_transitions(self, db_session: Session, sample_user, sample_job):
-        """Test different status values"""
+        """Test different status values by updating a single match"""
         statuses = ["matched", "interested", "applied", "rejected"]
 
+        # Create a single match and update its status (unique constraint on user_id, job_id)
+        match = Match(
+            user_id=sample_user.id,
+            job_id=sample_job.id,
+            score=85.0,
+            status="matched",
+        )
+        db_session.add(match)
+        db_session.commit()
+        db_session.refresh(match)
+
         for status in statuses:
-            match = Match(
-                user_id=sample_user.id,
-                job_id=sample_job.id,
-                score=85.0,
-                status=status,
-            )
-            db_session.add(match)
+            match.status = status
             db_session.commit()
             db_session.refresh(match)
 

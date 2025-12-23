@@ -11,7 +11,7 @@ import logging
 from app.database import get_db
 from app.models.user import User
 from app.models.allowed_email import AllowedEmail
-from app.dependencies.auth import get_current_user
+from app.dependencies.auth import get_current_user, invalidate_user_cache
 from app.services.redis_cache import get_cache_stats, reset_cache_metrics
 
 logger = logging.getLogger(__name__)
@@ -209,6 +209,67 @@ async def list_users(
             for u in users
         ],
         total=len(users)
+    )
+
+
+class UserUpdateRequest(BaseModel):
+    is_active: bool | None = None
+    is_admin: bool | None = None
+
+
+@router.put("/users/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_id: int,
+    user_update: UserUpdateRequest,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user)
+):
+    """
+    Update user properties (admin only)
+
+    - **user_id**: ID of the user to update
+    - **is_active**: Set user active/inactive status
+    - **is_admin**: Set user admin status
+
+    Returns updated user info.
+    """
+    # Prevent admin from modifying themselves
+    if user_id == admin_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot modify your own account via admin endpoint"
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Update fields if provided
+    if user_update.is_active is not None:
+        user.is_active = user_update.is_active
+        logger.info(f"Admin {admin_user.email} set user {user.email} is_active={user_update.is_active}")
+
+    if user_update.is_admin is not None:
+        user.is_admin = user_update.is_admin
+        logger.info(f"Admin {admin_user.email} set user {user.email} is_admin={user_update.is_admin}")
+
+    db.commit()
+    db.refresh(user)
+
+    # Invalidate user cache to ensure changes take effect immediately
+    invalidate_user_cache(user_id)
+
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        is_active=user.is_active,
+        is_admin=user.is_admin,
+        created_at=user.created_at.isoformat()
     )
 
 
