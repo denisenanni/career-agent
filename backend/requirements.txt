@@ -31,6 +31,9 @@ httpx==0.26.0
 # RSS parsing
 feedparser==6.0.11
 
+# Multi-board job scraping
+python-jobspy>=1.1.79
+
 # Utils
 python-dotenv==1.0.1
 

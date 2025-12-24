@@ -2216,3 +2216,411 @@ class TestScrapeAndSave:
                         # Should not raise, but should record error
                         assert stats["matches_created"] == 0
                         assert "matching_error" in stats
+
+
+# =============================================================================
+# JobSpy Scraper Tests
+# =============================================================================
+
+
+class MockPandasSeries(dict):
+    """Mock pandas Series that supports .get() method."""
+
+    def get(self, key, default=None):
+        return self.get(key, default) if key in self else default
+
+
+class TestJobSpyScraper:
+    """Tests for JobSpy multi-board scraper"""
+
+    def test_extract_tags_development(self):
+        """Test tag extraction for development keywords"""
+        from app.scrapers.jobspy_scraper import extract_tags
+
+        tags = extract_tags("Full Stack Developer", "React, TypeScript, Python, AWS experience")
+
+        assert "React" in tags
+        assert "Typescript" in tags
+        assert "Python" in tags
+        assert "Aws" in tags
+
+    def test_extract_tags_design(self):
+        """Test tag extraction for design keywords"""
+        from app.scrapers.jobspy_scraper import extract_tags
+
+        tags = extract_tags("UI/UX Designer", "Experience with Figma and Sketch required")
+
+        assert "Ui" in tags or "Ux" in tags
+        assert "Figma" in tags
+        assert "Sketch" in tags
+
+    def test_extract_tags_3d(self):
+        """Test tag extraction for 3D/creative keywords"""
+        from app.scrapers.jobspy_scraper import extract_tags
+
+        tags = extract_tags("3D Artist", "Blender, Unity, Unreal Engine experience")
+
+        assert "3d" in tags or "3D" in tags or "Blender" in tags
+        assert "Unity" in tags
+        assert "Unreal" in tags
+
+    def test_extract_tags_finds_many(self):
+        """Test tags extraction finds multiple tags"""
+        from app.scrapers.jobspy_scraper import extract_tags
+
+        text = "react vue angular javascript typescript python java aws gcp azure docker kubernetes figma sketch ui ux ml ai"
+        tags = extract_tags(text, text)
+
+        # Function finds all matching tags (limiting is done in normalize_job)
+        assert len(tags) > 10  # Should find many tags
+
+    def test_normalize_job_complete(self):
+        """Test job normalization with complete data"""
+        from app.scrapers.jobspy_scraper import normalize_job
+        import pandas as pd
+
+        row = pd.Series({
+            "title": "Senior Software Engineer",
+            "job_url": "https://indeed.com/job/123456",
+            "company": "Tech Corp",
+            "description": "Great job with React and Python",
+            "city": "San Francisco",
+            "state": "CA",
+            "country": "USA",
+            "is_remote": True,
+            "min_amount": 150000,
+            "max_amount": 200000,
+            "currency": "USD",
+            "date_posted": "2025-12-20",
+            "job_type": "fulltime",
+            "site": "indeed",
+        })
+
+        job = normalize_job(row)
+
+        assert job is not None
+        assert job["source"] == "jobspy_indeed"
+        assert job["title"] == "Senior Software Engineer"
+        assert job["company"] == "Tech Corp"
+        assert job["location"] == "San Francisco, CA, USA"
+        assert job["remote_type"] == "full"
+        assert job["salary_min"] == 150000
+        assert job["salary_max"] == 200000
+        assert job["job_type"] == "permanent"
+        assert "React" in job["tags"]
+        assert "Python" in job["tags"]
+
+    def test_normalize_job_no_title(self):
+        """Test normalization returns None for missing title"""
+        from app.scrapers.jobspy_scraper import normalize_job
+        import pandas as pd
+
+        row = pd.Series({
+            "title": "",
+            "job_url": "https://indeed.com/job/123",
+            "company": "Company",
+        })
+
+        job = normalize_job(row)
+        assert job is None
+
+    def test_normalize_job_no_url(self):
+        """Test normalization returns None for missing URL"""
+        from app.scrapers.jobspy_scraper import normalize_job
+        import pandas as pd
+
+        row = pd.Series({
+            "title": "Developer",
+            "job_url": "",
+            "company": "Company",
+        })
+
+        job = normalize_job(row)
+        assert job is None
+
+    def test_normalize_job_remote_location(self):
+        """Test remote location defaults correctly"""
+        from app.scrapers.jobspy_scraper import normalize_job
+        import pandas as pd
+
+        row = pd.Series({
+            "title": "Developer",
+            "job_url": "https://indeed.com/job/456",
+            "company": "Remote Co",
+            "is_remote": True,
+            "site": "google",
+        })
+
+        job = normalize_job(row)
+        assert job["location"] == "Remote"
+        assert job["remote_type"] == "full"
+        assert job["source"] == "jobspy_google"
+
+    def test_normalize_job_hybrid_location(self):
+        """Test hybrid detection from location"""
+        from app.scrapers.jobspy_scraper import normalize_job
+        import pandas as pd
+
+        row = pd.Series({
+            "title": "Developer",
+            "job_url": "https://indeed.com/job/789",
+            "company": "Hybrid Co",
+            "city": "Hybrid - New York",
+            "is_remote": False,
+            "site": "indeed",
+        })
+
+        job = normalize_job(row)
+        assert job["remote_type"] == "hybrid"
+
+    def test_normalize_job_part_time(self):
+        """Test part-time job type detection"""
+        from app.scrapers.jobspy_scraper import normalize_job
+        import pandas as pd
+
+        row = pd.Series({
+            "title": "Part-time Developer",
+            "job_url": "https://indeed.com/job/pt123",
+            "job_type": "parttime",
+            "site": "indeed",
+        })
+
+        job = normalize_job(row)
+        assert job["job_type"] == "part-time"
+
+    def test_normalize_job_contract(self):
+        """Test contract job type detection"""
+        from app.scrapers.jobspy_scraper import normalize_job
+        import pandas as pd
+
+        row = pd.Series({
+            "title": "Contract Engineer",
+            "job_url": "https://indeed.com/job/ct123",
+            "job_type": "contract",
+            "site": "indeed",
+        })
+
+        job = normalize_job(row)
+        assert job["job_type"] == "contract"
+
+    def test_normalize_job_internship(self):
+        """Test internship job type detection"""
+        from app.scrapers.jobspy_scraper import normalize_job
+        import pandas as pd
+
+        row = pd.Series({
+            "title": "Software Intern",
+            "job_url": "https://indeed.com/job/int123",
+            "job_type": "internship",
+            "site": "indeed",
+        })
+
+        job = normalize_job(row)
+        assert job["job_type"] == "contract"
+
+    def test_normalize_job_no_salary(self):
+        """Test job without salary info"""
+        from app.scrapers.jobspy_scraper import normalize_job
+        import pandas as pd
+        import numpy as np
+
+        row = pd.Series({
+            "title": "Developer",
+            "job_url": "https://indeed.com/job/nosalary",
+            "company": "Startup",
+            "min_amount": np.nan,
+            "max_amount": np.nan,
+            "site": "indeed",
+        })
+
+        job = normalize_job(row)
+        assert job["salary_min"] is None
+        assert job["salary_max"] is None
+        assert job["salary_currency"] is None
+
+    def test_normalize_job_description_limited(self):
+        """Test description is limited to 5000 chars"""
+        from app.scrapers.jobspy_scraper import normalize_job
+        import pandas as pd
+
+        row = pd.Series({
+            "title": "Developer",
+            "job_url": "https://indeed.com/job/longdesc",
+            "description": "x" * 10000,
+            "site": "indeed",
+        })
+
+        job = normalize_job(row)
+        assert len(job["description"]) <= 5000
+
+    def test_normalize_job_datetime_posted(self):
+        """Test date handling with datetime object"""
+        from app.scrapers.jobspy_scraper import normalize_job
+        import pandas as pd
+        from datetime import datetime
+
+        now = datetime.utcnow()
+        row = pd.Series({
+            "title": "Developer",
+            "job_url": "https://indeed.com/job/dated",
+            "date_posted": now,
+            "site": "indeed",
+        })
+
+        job = normalize_job(row)
+        assert job["posted_at"] == now
+
+    def test_fetch_jobs_success(self):
+        """Test fetch_jobs calls jobspy correctly"""
+        from app.scrapers.jobspy_scraper import fetch_jobs
+        import pandas as pd
+
+        mock_df = pd.DataFrame([
+            {"title": "Dev1", "job_url": "https://indeed.com/1", "site": "indeed"},
+            {"title": "Dev2", "job_url": "https://google.com/2", "site": "google"},
+        ])
+
+        with patch("jobspy.scrape_jobs", return_value=mock_df) as mock_scrape:
+            result = fetch_jobs(
+                search_term="developer",
+                sites=["indeed", "google"],
+                results_per_site=10,
+            )
+
+            mock_scrape.assert_called_once()
+            assert len(result) == 2
+
+    def test_fetch_jobs_default_sites(self):
+        """Test fetch_jobs uses default sites when none specified"""
+        from app.scrapers.jobspy_scraper import fetch_jobs, DEFAULT_SITES
+        import pandas as pd
+
+        mock_df = pd.DataFrame([])
+
+        with patch("jobspy.scrape_jobs", return_value=mock_df) as mock_scrape:
+            fetch_jobs(search_term="developer")
+
+            call_kwargs = mock_scrape.call_args[1]
+            assert call_kwargs["site_name"] == DEFAULT_SITES
+
+    @pytest.mark.asyncio
+    async def test_fetch_all_jobs_success(self):
+        """Test fetch_all_jobs with multiple search terms"""
+        from app.scrapers.jobspy_scraper import fetch_all_jobs
+        import pandas as pd
+
+        mock_df = pd.DataFrame([
+            {"title": "Developer", "job_url": "https://indeed.com/1", "site": "indeed"},
+        ])
+
+        with patch("app.scrapers.jobspy_scraper.fetch_jobs", return_value=mock_df):
+            jobs = await fetch_all_jobs(
+                search_terms=["developer", "engineer"],
+                results_per_site=10,
+            )
+
+            # Should dedupe based on URL
+            assert len(jobs) == 1
+
+    @pytest.mark.asyncio
+    async def test_fetch_all_jobs_deduplication(self):
+        """Test fetch_all_jobs dedupes jobs by URL"""
+        from app.scrapers.jobspy_scraper import fetch_all_jobs
+        import pandas as pd
+
+        # Same job returned by different searches
+        mock_df1 = pd.DataFrame([
+            {"title": "Developer", "job_url": "https://indeed.com/same", "site": "indeed"},
+        ])
+        mock_df2 = pd.DataFrame([
+            {"title": "Developer", "job_url": "https://indeed.com/same", "site": "indeed"},
+            {"title": "Engineer", "job_url": "https://indeed.com/different", "site": "indeed"},
+        ])
+
+        call_count = [0]
+
+        def mock_fetch(*args, **kwargs):
+            call_count[0] += 1
+            return mock_df1 if call_count[0] == 1 else mock_df2
+
+        with patch("app.scrapers.jobspy_scraper.fetch_jobs", side_effect=mock_fetch):
+            jobs = await fetch_all_jobs(search_terms=["dev", "eng"])
+
+            # Should have 2 unique jobs (1 duplicate removed)
+            assert len(jobs) == 2
+
+    @pytest.mark.asyncio
+    async def test_fetch_all_jobs_handles_errors(self):
+        """Test fetch_all_jobs continues on individual search failures"""
+        from app.scrapers.jobspy_scraper import fetch_all_jobs
+        import pandas as pd
+
+        call_count = [0]
+
+        def mock_fetch(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise Exception("Rate limited")
+            return pd.DataFrame([
+                {"title": "Developer", "job_url": "https://indeed.com/1", "site": "indeed"},
+            ])
+
+        with patch("app.scrapers.jobspy_scraper.fetch_jobs", side_effect=mock_fetch):
+            jobs = await fetch_all_jobs(search_terms=["fail", "succeed"])
+
+            # Should still get jobs from second search
+            assert len(jobs) == 1
+
+    @pytest.mark.asyncio
+    async def test_scrape_and_save_success(self):
+        """Test scrape_and_save success path"""
+        from app.scrapers import jobspy_scraper
+
+        mock_scraper_service = MagicMock()
+        mock_scraper_service.create_scrape_log.return_value = MagicMock(id=1)
+        mock_scraper_service.save_jobs.return_value = {"total": 5, "new": 3, "updated": 2}
+
+        with patch.object(jobspy_scraper, "fetch_all_jobs", new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = [
+                {"source": "jobspy_indeed", "title": "Dev1", "url": "https://indeed.com/1"},
+                {"source": "jobspy_google", "title": "Dev2", "url": "https://google.com/2"},
+            ]
+
+            with patch("app.database.get_db_session") as mock_db:
+                mock_session = MagicMock()
+                mock_db.return_value.__enter__.return_value = mock_session
+                mock_session.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
+
+                with patch("app.services.scraper.ScraperService") as mock_service_class:
+                    mock_service_class.return_value = mock_scraper_service
+
+                    stats = await jobspy_scraper.scrape_and_save()
+
+                    assert stats["total"] == 5
+                    assert stats["new"] == 3
+
+    @pytest.mark.asyncio
+    async def test_scrape_and_save_failure(self):
+        """Test scrape_and_save failure path"""
+        from app.scrapers import jobspy_scraper
+
+        mock_scraper_service = MagicMock()
+        mock_scraper_service.create_scrape_log.return_value = MagicMock(id=1)
+
+        with patch.object(jobspy_scraper, "fetch_all_jobs", new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.side_effect = Exception("JobSpy API error")
+
+            with patch("app.database.get_db_session") as mock_db:
+                mock_db.return_value.__enter__.return_value = MagicMock()
+
+                with patch("app.services.scraper.ScraperService") as mock_service_class:
+                    mock_service_class.return_value = mock_scraper_service
+
+                    with pytest.raises(Exception, match="JobSpy API error"):
+                        await jobspy_scraper.scrape_and_save()
+
+                    mock_scraper_service.update_scrape_log.assert_called_with(
+                        scrape_log_id=1,
+                        status="failed",
+                        error="JobSpy API error",
+                    )
