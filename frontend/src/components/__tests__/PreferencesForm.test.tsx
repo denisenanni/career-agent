@@ -132,6 +132,12 @@ describe('PreferencesForm', () => {
         vi.advanceTimersByTime(100)
       })
 
+      // Expand the Job Types collapsible section
+      const jobTypesSection = screen.getByRole('button', { name: /job types/i })
+      await act(async () => {
+        fireEvent.click(jobTypesSection)
+      })
+
       // Find and click the contract checkbox
       const contractCheckbox = screen.getByLabelText(/contract/i)
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import toast from 'react-hot-toast'
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -74,14 +75,17 @@ export function useAutoSave<T>({
     try {
       await onSaveRef.current(dataRef.current)
       setStatus('saved')
+      toast.success('Changes saved')
 
       // Reset to idle after showing "saved" for a moment
       setTimeout(() => {
         setStatus((current) => current === 'saved' ? 'idle' : current)
       }, 2000)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save')
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save'
+      setError(errorMessage)
       setStatus('error')
+      toast.error(errorMessage)
     } finally {
       isSavingRef.current = false
 

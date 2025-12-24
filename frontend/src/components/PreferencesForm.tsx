@@ -4,6 +4,7 @@ import { updateProfile } from '../api/profile'
 import { useAuth } from '../contexts/AuthContext'
 import { useAutoSave } from '../hooks/useAutoSave'
 import { SaveStatusIndicator } from './SaveStatusIndicator'
+import { CollapsibleSection } from './CollapsibleSection'
 import type { UserPreferences } from '../types'
 
 export function PreferencesForm() {
@@ -138,10 +139,7 @@ export function PreferencesForm() {
           )}
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Job Types <span className="text-gray-500 text-xs">(select all that apply)</span>
-          </label>
+        <CollapsibleSection title="Job Types" selectedCount={jobTypes.length}>
           <div className="space-y-2">
             {['permanent', 'contract', 'freelance', 'part-time'].map((type) => (
               <label key={type} className="flex items-center gap-2 cursor-pointer">
@@ -158,12 +156,9 @@ export function PreferencesForm() {
           {jobTypes.length === 0 && (
             <p className="text-xs text-gray-500 mt-1">No selection = open to all types</p>
           )}
-        </div>
+        </CollapsibleSection>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Remote Work Preference <span className="text-gray-500 text-xs">(select all that apply)</span>
-          </label>
+        <CollapsibleSection title="Remote Work Preference" selectedCount={remoteTypes.length}>
           <div className="space-y-2">
             {[
               { value: 'full', label: 'Fully Remote' },
@@ -184,12 +179,9 @@ export function PreferencesForm() {
           {remoteTypes.length === 0 && (
             <p className="text-xs text-gray-500 mt-1">No selection = open to all types</p>
           )}
-        </div>
+        </CollapsibleSection>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Preferred Countries/Locations <span className="text-gray-500 text-xs">(select all that apply)</span>
-          </label>
+        <CollapsibleSection title="Preferred Countries/Locations" selectedCount={preferredCountries.length}>
           <div className="space-y-2">
             {[
               'Remote',
@@ -217,12 +209,9 @@ export function PreferencesForm() {
           {preferredCountries.length === 0 && (
             <p className="text-xs text-gray-500 mt-1">No selection = open to all locations</p>
           )}
-        </div>
+        </CollapsibleSection>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Employment Eligibility <span className="text-gray-500 text-xs">(regions where you can work)</span>
-          </label>
+        <CollapsibleSection title="Employment Eligibility" selectedCount={eligibleRegions.length}>
           <div className="space-y-2">
             {[
               { value: 'Worldwide', label: 'Worldwide (no restrictions)' },
@@ -250,7 +239,7 @@ export function PreferencesForm() {
           <p className="text-xs text-gray-500 mt-2">
             Jobs restricted to regions you haven't selected will be filtered out
           </p>
-        </div>
+        </CollapsibleSection>
 
         <div>
           <label className="flex items-center gap-2 cursor-pointer">

@@ -19,6 +19,10 @@ export function ProfilePage() {
     setParsedCVRefreshTrigger(prev => prev + 1)
   }
 
+  const existingCV = user?.cv_filename && user?.cv_uploaded_at
+    ? { filename: user.cv_filename, uploadedAt: user.cv_uploaded_at }
+    : undefined
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -31,7 +35,7 @@ export function ProfilePage() {
         )}
       </div>
 
-      {/* Profile Info */}
+      {/* Profile Info + CV Upload */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Profile Information</h2>
         <div className="grid md:grid-cols-2 gap-4 text-sm">
@@ -62,30 +66,20 @@ export function ProfilePage() {
               )}
             </div>
           </div>
-          {user?.cv_filename && (
-            <div className="md:col-span-2">
-              <span className="text-gray-600">CV Uploaded:</span>
-              <span className="ml-2 text-gray-900">{user.cv_filename}</span>
-              <span className="ml-2 text-gray-500 text-xs">
-                ({new Date(user.cv_uploaded_at!).toLocaleDateString()})
-              </span>
-            </div>
-          )}
+        </div>
+        {/* CV Upload - compact when CV exists */}
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <CVUpload onUploadSuccess={handleUploadSuccess} existingCV={existingCV} />
         </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* CV Upload */}
-        <CVUpload onUploadSuccess={handleUploadSuccess} />
-
-        {/* Preferences Form */}
-        <PreferencesForm />
-      </div>
-
-      {/* Parsed CV Display */}
+      {/* Parsed CV Data - THE MAIN CONTENT */}
       {(showParsedCV || user?.cv_filename) && (
         <ParsedCVDisplay refreshTrigger={parsedCVRefreshTrigger} />
       )}
+
+      {/* Job Preferences - at the bottom */}
+      <PreferencesForm />
     </div>
   )
 }

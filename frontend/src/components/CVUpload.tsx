@@ -1,18 +1,35 @@
-import { useState, useRef } from 'react'
-import { Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Upload, FileText, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react'
 import { uploadCV } from '../api/profile'
 import { LoadingSpinner } from './LoadingSpinner'
 import type { CVUploadResponse } from '../types'
 
-interface CVUploadProps {
-  onUploadSuccess: (response: CVUploadResponse) => void
+interface ExistingCV {
+  filename: string
+  uploadedAt: string
 }
 
-export function CVUpload({ onUploadSuccess }: CVUploadProps) {
+interface CVUploadProps {
+  onUploadSuccess: (response: CVUploadResponse) => void
+  existingCV?: ExistingCV
+}
+
+export function CVUpload({ onUploadSuccess, existingCV }: CVUploadProps) {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<CVUploadResponse | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Reset success state when existingCV changes (after user refresh)
+  // This ensures we go back to compact mode after upload
+  useEffect(() => {
+    if (existingCV && success) {
+      setSuccess(null)
+    }
+  }, [existingCV?.filename, existingCV?.uploadedAt])
+
+  // Show compact mode if CV exists
+  const showCompact = !!existingCV
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -51,6 +68,53 @@ export function CVUpload({ onUploadSuccess }: CVUploadProps) {
     fileInputRef.current?.click()
   }
 
+  // Compact mode: show existing CV with replace button (no card wrapper - embedded in parent)
+  if (showCompact) {
+    return (
+      <div>
+        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+          <div className="flex items-center gap-3">
+            <FileText className="w-5 h-5 text-indigo-600" />
+            <div>
+              <p className="text-sm font-medium text-gray-900">{existingCV.filename}</p>
+              <p className="text-xs text-gray-500">
+                Uploaded {new Date(existingCV.uploadedAt).toLocaleDateString()}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleClick}
+            disabled={uploading}
+            className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1"
+          >
+            {uploading ? (
+              <LoadingSpinner size="sm" />
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4" />
+                Replace
+              </>
+            )}
+          </button>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          accept=".pdf,.docx,.txt"
+          onChange={handleFileSelect}
+        />
+        {error && (
+          <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-md flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+            <p className="text-red-700 text-xs">{error}</p>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Full mode: dropzone for upload
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <h2 className="text-lg font-semibold text-gray-900 mb-4">Upload CV</h2>

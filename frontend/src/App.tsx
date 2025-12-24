@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from './contexts/AuthContext'
 import { Layout } from './components/Layout'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -27,6 +28,7 @@ const PageLoader = () => (
 function App() {
   return (
     <AuthProvider>
+      <Toaster position="bottom-right" />
       <BrowserRouter>
         <Suspense fallback={<PageLoader />}>
           <Routes>
