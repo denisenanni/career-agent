@@ -1,15 +1,82 @@
 import { Link } from 'react-router-dom'
-import { Upload, Search, FileText } from 'lucide-react'
+import { Upload, Search, FileText, Sparkles, Target, Zap } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
 export function HomePage() {
+  const { user } = useAuth()
+
+  // Logged-out: Hero with value proposition
+  if (!user) {
+    return (
+      <div className="space-y-12">
+        {/* Hero Section */}
+        <div className="text-center py-12">
+          <h1 className="text-5xl font-bold text-gray-900">
+            Land Your Dream Job with AI
+          </h1>
+          <p className="mt-6 text-xl text-gray-600 max-w-2xl mx-auto">
+            Stop wasting hours on job applications. Upload your CV once, and let AI match you
+            with the perfect opportunities and generate tailored cover letters.
+          </p>
+          <div className="mt-8 flex justify-center gap-4">
+            <Link
+              to="/register"
+              className="px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+            >
+              Get Started Free
+            </Link>
+            <Link
+              to="/login"
+              className="px-6 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Sign In
+            </Link>
+          </div>
+        </div>
+
+        {/* Value Props */}
+        <div className="grid md:grid-cols-3 gap-8">
+          <div className="text-center">
+            <div className="w-14 h-14 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Target className="w-7 h-7 text-indigo-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900">Smart Matching</h3>
+            <p className="mt-2 text-gray-600">
+              AI analyzes your skills and experience to find jobs where you're a strong fit.
+            </p>
+          </div>
+          <div className="text-center">
+            <div className="w-14 h-14 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Sparkles className="w-7 h-7 text-indigo-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900">AI Cover Letters</h3>
+            <p className="mt-2 text-gray-600">
+              Generate personalized cover letters tailored to each job in seconds.
+            </p>
+          </div>
+          <div className="text-center">
+            <div className="w-14 h-14 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Zap className="w-7 h-7 text-indigo-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900">Save Hours</h3>
+            <p className="mt-2 text-gray-600">
+              Stop manually searching job boards. We aggregate and rank opportunities for you.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Logged-in: User flow cards
   return (
     <div className="space-y-8">
       <div className="text-center">
         <h1 className="text-4xl font-bold text-gray-900">
-          Your AI-Powered Job Hunt Assistant
+          Welcome back{user.full_name ? `, ${user.full_name.split(' ')[0]}` : ''}!
         </h1>
         <p className="mt-4 text-xl text-gray-600 max-w-2xl mx-auto">
-          Upload your CV, set your preferences, and let us find the perfect job matches for you.
+          Continue your job search journey.
         </p>
       </div>
 
@@ -61,13 +128,6 @@ export function HomePage() {
             View Matches →
           </Link>
         </div>
-      </div>
-
-      <div className="bg-indigo-50 rounded-lg p-6 mt-8">
-        <h2 className="text-lg font-semibold text-indigo-900">Status</h2>
-        <p className="mt-2 text-indigo-700">
-          🚧 This is a work in progress. Features are being added incrementally.
-        </p>
       </div>
     </div>
   )

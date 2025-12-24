@@ -36,7 +36,7 @@ function App() {
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/" element={<Layout />}>
               <Route index element={<HomePage />} />
-              <Route path="jobs" element={<JobsPage />} />
+              <Route path="jobs" element={<ProtectedRoute><JobsPage /></ProtectedRoute>} />
               <Route path="my-jobs" element={<ProtectedRoute><MyJobsPage /></ProtectedRoute>} />
               <Route path="matches" element={<ProtectedRoute><MatchesPage /></ProtectedRoute>} />
               <Route path="insights" element={<ProtectedRoute><InsightsPage /></ProtectedRoute>} />

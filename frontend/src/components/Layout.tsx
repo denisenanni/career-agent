@@ -15,7 +15,11 @@ import {
 import { clsx } from "clsx";
 import { useAuth } from "../contexts/AuthContext";
 
-const navItems = [
+const publicNavItems = [
+  { to: "/", label: "Home", icon: Home },
+];
+
+const protectedNavItems = [
   { to: "/", label: "Home", icon: Home },
   { to: "/jobs", label: "Jobs", icon: Briefcase },
   { to: "/my-jobs", label: "My Jobs", icon: FileText },
@@ -28,6 +32,8 @@ export function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const navItems = user ? protectedNavItems : publicNavItems;
 
   const handleLogout = async () => {
     await logout();
