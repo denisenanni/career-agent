@@ -91,7 +91,7 @@ class JobScrapedData(BaseModel):
     # Optional fields with defaults
     salary_min: Optional[int] = Field(None, ge=0, le=10000000)
     salary_max: Optional[int] = Field(None, ge=0, le=10000000)
-    salary_currency: str = Field(default="USD", max_length=10)
+    salary_currency: Optional[str] = Field(default=None, max_length=10)
     location: str = Field(default="Remote", max_length=MAX_LOCATION_LENGTH)
     remote_type: str = Field(default="full", max_length=20)
     job_type: str = Field(default="permanent", max_length=20)
@@ -163,7 +163,7 @@ class JobBase(BaseModel):
     company: str
     salary_min: Optional[int] = None
     salary_max: Optional[int] = None
-    salary_currency: str
+    salary_currency: Optional[str] = None
     location: str
     remote_type: str
     job_type: str

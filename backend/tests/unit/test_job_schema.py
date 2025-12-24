@@ -48,7 +48,7 @@ class TestJobScrapedDataValidation:
         validated = JobScrapedData(**job_data)
 
         assert validated.source_id == "job456"
-        assert validated.salary_currency == "USD"  # default
+        assert validated.salary_currency is None  # default (None when no salary)
         assert validated.location == "Remote"  # default
         assert validated.remote_type == "full"  # default
         assert validated.job_type == "permanent"  # default

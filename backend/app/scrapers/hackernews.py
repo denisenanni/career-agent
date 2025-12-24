@@ -83,11 +83,21 @@ def normalize_job(item) -> Optional[dict]:
             elif "onsite" in part_lower or "on-site" in part_lower:
                 remote_type = None
         elif any(loc in part_lower for loc in ["usa", "eu", "uk", "us ", "europe", "worldwide", "sf", "nyc"]):
-            location = part
+            # Only use if it's a reasonable location string (not too long)
+            if len(part) <= 200:
+                location = part
 
     # If no company found in first line, use poster name
     if not company or company == first_line:
         company = poster_name if poster_name else "Unknown"
+
+    # Limit field lengths to schema requirements
+    if len(company) > 200:
+        company = company[:197] + "..."
+    if len(title) > 500:
+        title = title[:497] + "..."
+    if len(location) > 200:
+        location = location[:197] + "..."
 
     # Parse date
     posted_at = None
@@ -126,7 +136,7 @@ def normalize_job(item) -> Optional[dict]:
         "description": description[:5000] if description else "",  # Limit description length
         "salary_min": salary_min,
         "salary_max": salary_max,
-        "salary_currency": "USD",
+        "salary_currency": "USD" if salary_min else None,
         "location": location,
         "remote_type": remote_type or "full",  # Default to full remote if mentioned in HN hiring
         "job_type": job_type,
