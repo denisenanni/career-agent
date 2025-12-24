@@ -28,6 +28,9 @@ email-validator==2.2.0
 # HTTP client
 httpx==0.26.0
 
+# RSS parsing
+feedparser==6.0.11
+
 # Utils
 python-dotenv==1.0.1
 

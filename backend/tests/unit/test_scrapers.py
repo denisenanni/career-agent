@@ -1598,6 +1598,428 @@ Must work in office</description>
 
 
 # =============================================================================
+# Authentic Jobs Scraper Tests
+# =============================================================================
+
+
+class FeedParserEntry(dict):
+    """Mock feedparser entry that supports both dict and attribute access."""
+
+    def __getattr__(self, name):
+        try:
+            return self[name]
+        except KeyError:
+            raise AttributeError(name)
+
+
+class TestAuthenticJobsScraper:
+    """Tests for Authentic Jobs RSS scraper"""
+
+    def test_clean_html_basic(self):
+        """Test HTML cleaning"""
+        from app.scrapers.authenticjobs import clean_html
+
+        html = "<p>Job description</p><br><strong>Requirements</strong>"
+        result = clean_html(html)
+
+        assert "Job description" in result
+        assert "Requirements" in result
+        assert "<" not in result
+
+    def test_clean_html_empty(self):
+        """Test HTML cleaning with empty input"""
+        from app.scrapers.authenticjobs import clean_html
+
+        assert clean_html("") == ""
+        assert clean_html(None) == ""
+
+    def test_clean_html_entities(self):
+        """Test HTML entity decoding"""
+        from app.scrapers.authenticjobs import clean_html
+
+        html = "&amp; more &quot;text&quot;"
+        result = clean_html(html)
+
+        assert "&" in result
+        assert "more" in result
+        assert "text" in result
+
+    def test_extract_salary_full_dollar_format(self):
+        """Test salary extraction with $90,000 – $125,000 format"""
+        from app.scrapers.authenticjobs import extract_salary
+
+        min_sal, max_sal = extract_salary("Annual Compensation: $90,000 – $125,000")
+        assert min_sal == 90000
+        assert max_sal == 125000
+
+    def test_extract_salary_k_format(self):
+        """Test salary extraction with $100k - $150k format"""
+        from app.scrapers.authenticjobs import extract_salary
+
+        min_sal, max_sal = extract_salary("Salary: $100k - $150k")
+        assert min_sal == 100000
+        assert max_sal == 150000
+
+    def test_extract_salary_none(self):
+        """Test salary extraction with no salary"""
+        from app.scrapers.authenticjobs import extract_salary
+
+        min_sal, max_sal = extract_salary("No salary mentioned")
+        assert min_sal is None
+        assert max_sal is None
+
+    def test_extract_salary_empty(self):
+        """Test salary extraction with empty input"""
+        from app.scrapers.authenticjobs import extract_salary
+
+        min_sal, max_sal = extract_salary("")
+        assert min_sal is None
+        assert max_sal is None
+
+        min_sal, max_sal = extract_salary(None)
+        assert min_sal is None
+        assert max_sal is None
+
+    def test_detect_remote_type_full_remote(self):
+        """Test remote type detection for full remote"""
+        from app.scrapers.authenticjobs import detect_remote_type
+
+        assert detect_remote_type("Remote") == "full"
+        assert detect_remote_type("Fully Remote") == "full"
+        assert detect_remote_type("100% Remote") == "full"
+
+    def test_detect_remote_type_hybrid(self):
+        """Test remote type detection for hybrid"""
+        from app.scrapers.authenticjobs import detect_remote_type
+
+        assert detect_remote_type("Hybrid - San Francisco") == "hybrid"
+        assert detect_remote_type("Hybrid Remote") == "hybrid"
+        assert detect_remote_type("Remote or Hybrid") == "hybrid"
+
+    def test_detect_remote_type_onsite(self):
+        """Test remote type detection for onsite"""
+        from app.scrapers.authenticjobs import detect_remote_type
+
+        assert detect_remote_type("San Francisco, CA") == "onsite"
+        assert detect_remote_type("New York") == "onsite"
+        assert detect_remote_type("") == "onsite"
+
+    def test_extract_tags_design(self):
+        """Test tag extraction for design keywords"""
+        from app.scrapers.authenticjobs import extract_tags
+
+        tags = extract_tags("UI/UX Designer", "Experience with Figma and Sketch required")
+
+        assert "Ui" in tags or "Ux" in tags
+        assert "Figma" in tags
+        assert "Sketch" in tags
+
+    def test_extract_tags_development(self):
+        """Test tag extraction for development keywords"""
+        from app.scrapers.authenticjobs import extract_tags
+
+        tags = extract_tags("Full Stack Developer", "React, TypeScript, Python, AWS")
+
+        assert "React" in tags
+        assert "Typescript" in tags
+        assert "Python" in tags
+        assert "Aws" in tags
+
+    def test_extract_tags_limited(self):
+        """Test tags are limited to 15"""
+        from app.scrapers.authenticjobs import extract_tags
+
+        # Text with many keywords
+        text = "react vue angular javascript typescript python java aws gcp azure docker kubernetes figma sketch photoshop illustrator wordpress shopify"
+        tags = extract_tags(text, text)
+
+        assert len(tags) <= 15
+
+    def test_normalize_job_complete(self):
+        """Test job normalization with complete RSS entry"""
+        from app.scrapers.authenticjobs import normalize_job
+
+        entry = FeedParserEntry({
+            "title": "Lead Digital Designer (Web & UX)",
+            "link": "https://authenticjobs.com/job/35335/company-designer/",
+            "job_listing_company": "Interactive Strategies",
+            "job_listing_location": "Hybrid - Washington, DC or Remote",
+            "job_listing_job_type": "full-time",
+            "content": [{"value": "<p>Description with salary $90,000 – $125,000</p>"}],
+            "published_parsed": (2025, 12, 16, 22, 25, 10, 0, 0, 0),
+        })
+
+        job = normalize_job(entry)
+
+        assert job["source"] == "authenticjobs"
+        assert job["source_id"] == "35335"
+        assert job["title"] == "Lead Digital Designer (Web & UX)"
+        assert job["company"] == "Interactive Strategies"
+        assert job["remote_type"] == "hybrid"
+        assert job["job_type"] == "permanent"
+        assert job["salary_min"] == 90000
+        assert job["salary_max"] == 125000
+
+    def test_normalize_job_freelance_type(self):
+        """Test job type detection for freelance"""
+        from app.scrapers.authenticjobs import normalize_job
+
+        entry = {
+            "title": "Freelance Designer",
+            "link": "https://authenticjobs.com/job/12345/",
+            "job_listing_company": "Company",
+            "job_listing_job_type": "freelance",
+        }
+
+        job = normalize_job(entry)
+        assert job["job_type"] == "contract"
+
+    def test_normalize_job_part_time_type(self):
+        """Test job type detection for part-time"""
+        from app.scrapers.authenticjobs import normalize_job
+
+        entry = {
+            "title": "Part-time Developer",
+            "link": "https://authenticjobs.com/job/12346/",
+            "job_listing_company": "Company",
+            "job_listing_job_type": "part-time",
+        }
+
+        job = normalize_job(entry)
+        assert job["job_type"] == "part-time"
+
+    def test_normalize_job_contract_type(self):
+        """Test job type detection for contract"""
+        from app.scrapers.authenticjobs import normalize_job
+
+        entry = {
+            "title": "Contract Engineer",
+            "link": "https://authenticjobs.com/job/12347/",
+            "job_listing_company": "Company",
+            "job_listing_job_type": "contract",
+        }
+
+        job = normalize_job(entry)
+        assert job["job_type"] == "contract"
+
+    def test_normalize_job_internship_type(self):
+        """Test job type detection for internship"""
+        from app.scrapers.authenticjobs import normalize_job
+
+        entry = {
+            "title": "Design Intern",
+            "link": "https://authenticjobs.com/job/12348/",
+            "job_listing_company": "Company",
+            "job_listing_job_type": "internship",
+        }
+
+        job = normalize_job(entry)
+        assert job["job_type"] == "contract"
+
+    def test_normalize_job_no_title(self):
+        """Test normalization with missing title returns None"""
+        from app.scrapers.authenticjobs import normalize_job
+
+        entry = {
+            "title": "",
+            "link": "https://authenticjobs.com/job/99999/",
+        }
+
+        job = normalize_job(entry)
+        assert job is None
+
+    def test_normalize_job_summary_fallback(self):
+        """Test description falls back to summary"""
+        from app.scrapers.authenticjobs import normalize_job
+
+        entry = {
+            "title": "Developer",
+            "link": "https://authenticjobs.com/job/88888/",
+            "job_listing_company": "Company",
+            "summary": "Brief job summary here",
+        }
+
+        job = normalize_job(entry)
+        assert "Brief job summary" in job["description"]
+
+    def test_normalize_job_url_fallback_source_id(self):
+        """Test source_id falls back to guid when URL has no job ID"""
+        from app.scrapers.authenticjobs import normalize_job
+
+        entry = {
+            "title": "Developer",
+            "link": "https://example.com/no-job-id",
+            "id": "unique-guid-12345",
+            "job_listing_company": "Company",
+        }
+
+        job = normalize_job(entry)
+        assert job["source_id"] == "unique-guid-12345"
+
+    def test_normalize_job_published_string_fallback(self):
+        """Test date parsing from published string"""
+        from app.scrapers.authenticjobs import normalize_job
+
+        entry = FeedParserEntry({
+            "title": "Developer",
+            "link": "https://authenticjobs.com/job/77777/",
+            "job_listing_company": "Company",
+            "published": "Mon, 01 Dec 2025 10:00:00 +0000",
+        })
+
+        job = normalize_job(entry)
+        assert job["posted_at"] is not None
+
+    def test_normalize_job_description_limited(self):
+        """Test description is limited to 5000 chars"""
+        from app.scrapers.authenticjobs import normalize_job
+
+        entry = FeedParserEntry({
+            "title": "Developer",
+            "link": "https://authenticjobs.com/job/66666/",
+            "job_listing_company": "Company",
+            "content": [{"value": "x" * 10000}],
+        })
+
+        job = normalize_job(entry)
+        assert len(job["description"]) <= 5000
+
+    @pytest.mark.asyncio
+    async def test_fetch_jobs_success(self):
+        """Test successful job fetching from RSS"""
+        from app.scrapers.authenticjobs import fetch_jobs
+        import feedparser
+
+        mock_feed = MagicMock()
+        mock_feed.bozo = False
+        mock_feed.entries = [
+            {
+                "title": "Designer",
+                "link": "https://authenticjobs.com/job/111/",
+                "job_listing_company": "Company1",
+                "job_listing_job_type": "full-time",
+            },
+            {
+                "title": "Developer",
+                "link": "https://authenticjobs.com/job/222/",
+                "job_listing_company": "Company2",
+                "job_listing_job_type": "full-time",
+            },
+        ]
+
+        with patch("feedparser.parse", return_value=mock_feed):
+            jobs = await fetch_jobs()
+
+            assert len(jobs) == 2
+            assert jobs[0]["title"] == "Designer"
+            assert jobs[1]["title"] == "Developer"
+
+    @pytest.mark.asyncio
+    async def test_fetch_jobs_empty_feed(self):
+        """Test fetching with empty RSS feed"""
+        from app.scrapers.authenticjobs import fetch_jobs
+
+        mock_feed = MagicMock()
+        mock_feed.bozo = False
+        mock_feed.entries = []
+
+        with patch("feedparser.parse", return_value=mock_feed):
+            jobs = await fetch_jobs()
+            assert jobs == []
+
+    @pytest.mark.asyncio
+    async def test_fetch_jobs_bozo_error(self):
+        """Test fetching handles RSS parse errors"""
+        from app.scrapers.authenticjobs import fetch_jobs
+
+        mock_feed = MagicMock()
+        mock_feed.bozo = True
+        mock_feed.bozo_exception = Exception("Parse error")
+
+        with patch("feedparser.parse", return_value=mock_feed):
+            with pytest.raises(Exception, match="Failed to parse RSS feed"):
+                await fetch_jobs()
+
+    @pytest.mark.asyncio
+    async def test_fetch_jobs_filters_invalid(self):
+        """Test fetching filters out invalid jobs"""
+        from app.scrapers.authenticjobs import fetch_jobs
+
+        mock_feed = MagicMock()
+        mock_feed.bozo = False
+        mock_feed.entries = [
+            {
+                "title": "Valid Job",
+                "link": "https://authenticjobs.com/job/111/",
+                "job_listing_company": "Company",
+            },
+            {
+                "title": "",  # Invalid - empty title
+                "link": "https://authenticjobs.com/job/222/",
+            },
+        ]
+
+        with patch("feedparser.parse", return_value=mock_feed):
+            jobs = await fetch_jobs()
+            assert len(jobs) == 1
+            assert jobs[0]["title"] == "Valid Job"
+
+    @pytest.mark.asyncio
+    async def test_scrape_and_save_success(self):
+        """Test Authentic Jobs scrape_and_save success path"""
+        from app.scrapers import authenticjobs
+
+        mock_scraper_service = MagicMock()
+        mock_scraper_service.create_scrape_log.return_value = MagicMock(id=1)
+        mock_scraper_service.save_jobs.return_value = {"total": 2, "new": 2, "updated": 0}
+
+        with patch.object(authenticjobs, "fetch_jobs", new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = [
+                {"source": "authenticjobs", "title": "Designer"},
+                {"source": "authenticjobs", "title": "Developer"},
+            ]
+
+            with patch("app.database.get_db_session") as mock_db:
+                mock_session = MagicMock()
+                mock_db.return_value.__enter__.return_value = mock_session
+                mock_session.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
+
+                with patch("app.services.scraper.ScraperService") as mock_service_class:
+                    mock_service_class.return_value = mock_scraper_service
+
+                    stats = await authenticjobs.scrape_and_save()
+
+                    assert stats["total"] == 2
+                    assert stats["new"] == 2
+
+    @pytest.mark.asyncio
+    async def test_scrape_and_save_failure(self):
+        """Test Authentic Jobs scrape_and_save failure path"""
+        from app.scrapers import authenticjobs
+
+        mock_scraper_service = MagicMock()
+        mock_scraper_service.create_scrape_log.return_value = MagicMock(id=1)
+
+        with patch.object(authenticjobs, "fetch_jobs", new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.side_effect = Exception("RSS fetch error")
+
+            with patch("app.database.get_db_session") as mock_db:
+                mock_db.return_value.__enter__.return_value = MagicMock()
+
+                with patch("app.services.scraper.ScraperService") as mock_service_class:
+                    mock_service_class.return_value = mock_scraper_service
+
+                    with pytest.raises(Exception, match="RSS fetch error"):
+                        await authenticjobs.scrape_and_save()
+
+                    mock_scraper_service.update_scrape_log.assert_called_with(
+                        scrape_log_id=1,
+                        status="failed",
+                        error="RSS fetch error",
+                    )
+
+
+# =============================================================================
 # Scrape and Save Tests (Integration with mocked database)
 # =============================================================================
 class TestScrapeAndSave:

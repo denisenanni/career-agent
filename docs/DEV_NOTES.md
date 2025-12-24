@@ -1,344 +1,336 @@
-# Development Notes
 
-Quick reference for development workflow, technical decisions, and debugging tips.
 
-**For project roadmap and future features, see [ROADMAP.md](./ROADMAP.md)**
+#DONE
+
+# Task: Profile Page UX Improvements
+
+## Goal
+
+Improve the Profile page UX by reducing visual clutter and making important information more visible.
 
 ---
 
-## Development Workflow
+## Issues to Fix
 
-### Stack Reminder
-- **Frontend:** React + TypeScript + Vite → `yarn` (NOT npm)
-- **Backend:** Python FastAPI → Alembic migrations, Pydantic validation
-- **LLMs:** Haiku for extraction, Sonnet for generation
-- **Database:** PostgreSQL (no `any` types - build proper types)
+1. **Auto-save indicator is hard to spot** - Can appear off-screen when user scrolls
+2. **Upload CV section takes too much space** - Even when CV is already uploaded
+3. **Checkbox lists are overwhelming** - Too many options visible at once
+4. **Parsed CV Data section is buried** - Most important info is at the bottom, easy to miss
 
-### Before Making Changes
-1. Check ROADMAP.md for current phase
-2. Verify approach with team/lead first
-3. Complete tasks, mark [x] when done
-4. Keep changes minimal and focused
-5. Check existing dependencies before installing new ones
+---
 
-### Common Commands
+## Changes
 
-```bash
-# Local Development
-docker-compose up -d          # Start Postgres + Redis
-yarn install                  # Install frontend deps (frontend/ directory)
-yarn backend:setup            # Set up Python venv
-yarn dev                      # Start frontend + backend concurrently
+### 1. Global Toast Notification System (Reusable)
 
-# Database
-yarn db:migrate               # Run Alembic migrations
-cd backend && alembic revision --autogenerate -m "description"  # Create migration
-cd backend && alembic current # Check current migration
-cd backend && alembic upgrade head  # Apply pending migrations
+Create a reusable toast notification system for use throughout the app - auto-save, API responses, user actions, errors, etc.
 
-# Testing
-cd backend && pytest                    # Run all backend tests
-cd backend && pytest tests/unit/        # Run unit tests only
-cd backend && pytest -v -k "test_name"  # Run specific test
-cd frontend && yarn test                # Run frontend tests
-cd frontend && yarn test:ui             # Run tests with UI
-cd frontend && yarn build               # Build frontend
+**Requirements:**
+- Fixed position (bottom-right corner), always visible regardless of scroll
+- Multiple toast types: success, error, warning, info
+- Auto-dismiss after 3 seconds (configurable)
+- Stack multiple toasts if needed
+- Accessible from anywhere in the app via hook or context
 
-# Terraform (Deployment)
-cd infrastructure/terraform
-terraform init
-terraform plan -var-file=dev.tfvars
-terraform apply -var-file=dev.tfvars
+**Example usage:**
+```tsx
+// Auto-save
+toast.success('Changes saved')
 
-# Manual Scraping (Testing)
-cd backend && python -m app.services.scraper
+// API responses
+toast.success('Cover letter generated')
+toast.error('Failed to fetch jobs')
+
+// User actions
+toast.info('Job added to matches')
+toast.warning('You have unsaved changes')
+```
+
+**Implementation options:**
+1. `react-hot-toast` - lightweight, easy to use (recommended)
+2. Custom implementation with Context + Portal
+
+**Setup with react-hot-toast:**
+```tsx
+// App.tsx
+import { Toaster } from 'react-hot-toast'
+
+function App() {
+  return (
+    <>
+      <Toaster position="bottom-right" />
+      {/* rest of app */}
+    </>
+  )
+}
+
+// Anywhere in the app
+import toast from 'react-hot-toast'
+toast.success('It works!')
+```
+
+**Use for:**
+- Auto-save confirmations
+- API success/error responses
+- Form submissions
+- Job scraping status
+- Cover letter generation
+- Any user feedback
+
+---
+
+### 2. Collapse Upload CV Section When CV Exists
+
+**Current:** Large dropzone always visible, even when CV uploaded
+
+**New behavior:**
+- If CV is uploaded, show compact version:
+  ```
+  📄 CV-Nanni-Software-Dev.pdf (uploaded 21/12/2025)  [Replace]
+  ```
+- "Replace" button opens file picker
+- Only show full dropzone when no CV is uploaded
+
+**Component structure:**
+```tsx
+{hasCV ? (
+  <CompactCVDisplay filename={cv.filename} date={cv.uploadedAt} onReplace={handleReplace} />
+) : (
+  <CVDropzone onUpload={handleUpload} />
+)}
 ```
 
 ---
 
-## LLM Usage Guidelines
+### 3. Collapsible Checkbox Groups
 
-**Cost Optimization is Critical:**
-- **Haiku 4.5:** Cheap, fast → Use for extraction (CV parsing, job requirements)
-- **Sonnet 4.5:** Expensive, high quality → Use for generation (cover letters, match analysis)
-- **Always cache LLM results:** Redis with 30-day TTL for generated content
-- **Current cache hit rate:** ~90% (saves significant API costs)
+Convert all checkbox lists to expandable/collapsible sections.
 
-**Cache Strategy:**
-| Content Type | Model | TTL | Cost per call | Cache savings |
-|--------------|-------|-----|--------------|---------------|
-| CV Parsing | Haiku | 30d | ~$0.01 | Free on hit |
-| Job Extraction | Haiku | 7d | ~$0.005 | Free on hit |
-| Cover Letter | Sonnet | 30d | ~$0.15 | Free on hit |
-| CV Highlights | Haiku | 30d | ~$0.01 | Free on hit |
+**Current:** All checkboxes visible, overwhelming
 
-**Never:**
-- Use Sonnet for simple extraction tasks
-- Skip caching (always cache LLM responses)
-- Make redundant LLM calls (check cache first)
-
----
-
-## Data Sources
-
-### RemoteOK
-- **API:** `https://remoteok.com/api`
-- **Format:** JSON (no auth required)
-- **Volume:** ~500 jobs per scrape
-- **Status:** ✅ Implemented and working
-
-### Future Job Boards
-See [ROADMAP.md](./ROADMAP.md#phase-8-post-production-features-future) for planned scrapers.
-
----
-
-## Code Conventions
-
-### Python (Backend)
-- Use type hints everywhere (`def func(user: User) -> Dict[str, Any]`)
-- Pydantic models for all API requests/responses
-- Services handle business logic, routers handle HTTP
-- Always use dependency injection (`Depends(get_db)`)
-- Cache LLM calls with Redis
-- Use Alembic for all schema changes (never modify DB directly)
-
-### TypeScript (Frontend)
-- **NO `any` types** - build proper interfaces
-- Use React Query for all API calls (built-in caching)
-- Components in `PascalCase`, files in `PascalCase.tsx`
-- API functions in `camelCase`
-- Use `yarn` not `npm`
-
-### SQL/Alembic
-- Always create migrations with `--autogenerate`
-- Review generated SQL before applying
-- Add indexes for foreign keys and frequently queried columns
-- Use `ON DELETE CASCADE` for dependent data
-
----
-
-## Ask Before...
-
-**Always ask before:**
-- Creating Alembic migrations (schema changes)
-- Deleting files or code
-- Installing new dependencies
-- Editing .env or Terraform configs
-- Running `git push`
-- Destructive database operations
-- `sudo` commands
-
-**Never do without asking:**
-- `rm -rf`
-- `git push --force`
-- `DROP TABLE` / `DROP DATABASE`
-- `terraform destroy`
-
----
-
-## Quick Debugging
-
-### Database Issues
-
-```bash
-# Check if PostgreSQL is running
-docker ps | grep postgres
-
-# View logs
-docker-compose logs postgres
-
-# Connect to database
-docker exec -it career-agent-postgres psql -U career_agent
-
-# Reset database (⚠️ DELETES ALL DATA)
-docker-compose down -v
-docker-compose up -d
-cd backend && alembic upgrade head
+**New:**
+```
+▶ Job Types (2 selected)
+▶ Remote Work Preference (1 selected)  
+▶ Preferred Countries (2 selected)
+▶ Employment Eligibility (1 selected)
 ```
 
-### Redis Issues
+**Behavior:**
+- Show selected count in header
+- Collapsed by default
+- Click header to expand/collapse
+- Optionally remember expand/collapse state in localStorage
 
-```bash
-# Check if Redis is running
-docker ps | grep redis
+**Apply to:**
+- Job Types
+- Remote Work Preference
+- Preferred Countries/Locations
+- Employment Eligibility
 
-# Test connection
-docker exec -it career-agent-redis redis-cli ping
+---
 
-# Clear cache
-docker exec -it career-agent-redis redis-cli FLUSHALL
+### 4. Reorder Page Layout
+
+**Current order:**
+1. Profile Information
+2. Upload CV + Job Preferences (side by side)
+3. Parsed CV Data (bottom, easy to miss)
+
+**New order:**
+1. Profile Information (compact: name, experience, CV file status)
+2. Parsed CV Data (skills, experience, education) - THE MAIN CONTENT
+3. Job Preferences (collapsible sections)
+
+This puts the most important information (parsed CV) front and center.
+
+---
+
+## Files to Modify
+
+| File | Changes |
+|------|---------|
+| `frontend/src/pages/ProfilePage.tsx` | Reorder sections, integrate toast |
+| `frontend/src/components/CVUpload.tsx` | Add compact mode when CV exists |
+| `frontend/src/components/PreferencesForm.tsx` | Add collapsible checkbox groups |
+| `frontend/src/components/Toast.tsx` | New component (or use react-hot-toast) |
+| `frontend/src/hooks/useAutoSave.ts` | Trigger toast on save success/error |
+
+---
+
+## Implementation Notes
+
+- Use `react-hot-toast` for quick implementation, or build custom if you want more control
+- For collapsible sections, can use simple useState or a small component:
+  ```tsx
+  <CollapsibleSection title="Job Types" selectedCount={2}>
+    {/* checkboxes */}
+  </CollapsibleSection>
+  ```
+- Test on mobile - collapsible sections help a lot on small screens
+
+---
+
+## Acceptance Criteria
+
+- [ ] Toast appears on save (visible regardless of scroll position)
+- [ ] CV upload section is compact when CV exists
+- [ ] All checkbox groups are collapsible
+- [ ] Parsed CV Data is above  Job Preferences
+- [ ] Page feels less cluttered and more scannable
+
+
+
+
+#TODO
+# Task: Add Creative & 3D Job Board Scrapers
+
+## Goal
+
+Expand job sources beyond tech/software to include creative, design, and 3D job boards. The existing matching algorithm will handle relevance - users with creative skills will match creative jobs.
+
+---
+
+## Job Boards to Add
+
+### Priority 1 (Easiest)
+
+| Site | Type | Notes |
+|------|------|-------|
+| **Dribbble Jobs** | API | Has public API, design/UI/UX focused |
+| **Authentic Jobs** | RSS | Has RSS feed, design + dev |
+
+### Priority 2 (Scraping Required)
+
+| Site | Type | Notes |
+|------|------|-------|
+| **ArtStation Jobs** | Scrape | 3D, game art, VFX, concept art |
+| **Behance Jobs** | Scrape | Adobe's creative job board |
+
+### Priority 3 (Future)
+
+- Motionographer (motion design)
+- Creativepool
+- Working Not Working
+- Krop
+
+---
+
+## Implementation
+
+### 1. Scraper Base Pattern
+
+Follow existing RemoteOK scraper pattern in `backend/app/scrapers/`:
+
+```python
+# backend/app/scrapers/dribbble.py
+async def scrape_dribbble() -> list[dict]:
+    """
+    Scrape Dribbble jobs API
+    Returns normalized job format
+    """
+    # Fetch from API/RSS/HTML
+    # Normalize to standard job format
+    # Return list of jobs
 ```
 
-### Backend Issues
+### 2. Standard Job Format
 
-```bash
-# Check backend logs
-docker-compose logs backend
+All scrapers must return jobs in this format:
 
-# Run specific test
-cd backend && pytest tests/integration/test_matches_router.py -v
-
-# Check database connection
-cd backend && python -c "from app.database import engine; print(engine.url)"
+```python
+{
+    "source": "dribbble",  # unique source identifier
+    "source_id": "123456",  # unique ID from source
+    "title": "Senior 3D Artist",
+    "company": "Studio Name",
+    "description": "Full job description...",
+    "url": "https://dribbble.com/jobs/123456",
+    "location": "Remote",
+    "salary_min": None,
+    "salary_max": None,
+    "tags": ["3D", "Blender", "Maya"],
+    "remote_type": "full",  # full, hybrid, onsite
+    "posted_at": datetime,
+}
 ```
 
-### Frontend Issues
+### 3. Add to Scraper Service
 
-```bash
-# Clear node_modules and reinstall
-rm -rf node_modules yarn.lock
-yarn install
+Update `backend/app/services/scraper.py`:
 
-# Check build
-yarn build
+```python
+from app.scrapers import remoteok, dribbble, artstation
 
-# Run with verbose logging
-yarn dev --debug
+async def scrape_all_sources():
+    """Run all enabled scrapers"""
+    jobs = []
+    jobs.extend(await remoteok.scrape())
+    jobs.extend(await dribbble.scrape())
+    jobs.extend(await artstation.scrape())
+    # ... dedupe and save to DB
 ```
 
----
+### 4. Deduplication
 
-## Environment Setup Checklist
-
-### First Time Setup
-- [ ] Clone repository
-- [ ] Copy `.env.example` to `.env` and fill in values
-- [ ] Start Docker: `docker-compose up -d`
-- [ ] Install frontend deps: `yarn install`
-- [ ] Set up backend venv: `yarn backend:setup`
-- [ ] Run migrations: `yarn db:migrate`
-- [ ] Start dev servers: `yarn dev`
-- [ ] Test scraper: `cd backend && python -m app.services.scraper`
-
-### After Pulling Changes
-- [ ] Check for new dependencies: `yarn install` + `cd backend && pip install -r requirements.txt`
-- [ ] Run new migrations: `yarn db:migrate`
-- [ ] Restart services if needed
+Jobs are deduped by `(source, source_id)` composite key - already implemented.
 
 ---
 
-## Recent Completed Work
+## Scraper Details
 
-**For detailed implementation history, see [ROADMAP.md](./ROADMAP.md)**
+### Dribbble Jobs
 
-### Latest (December 19, 2024)
-- ✅ Removed work_type from match scoring (now hard filter only)
-- ✅ Fixed test failures (35 → 26 failing)
-- ✅ Disabled rate limiting in tests
-- ✅ Fixed frontend build (excluded test files from TSC)
-- ✅ Email allowlist comprehensive test suite (27 tests)
+- URL: https://dribbble.com/jobs
+- Check for API: https://dribbble.com/api or scrape HTML
+- Categories: Product Design, UI/UX, Brand, Illustration, Animation
 
-### Recent Major Features
-- ✅ UI Polish - Loading states, error handling, mobile responsive
-- ✅ User-Submitted Jobs - Paste custom job postings
-- ✅ Employment Eligibility Filter - Geographic/visa restrictions
-- ✅ Email Allowlist System - Control registration with admin API
-- ✅ Security Hardening - JWT validation, rate limiting, CORS
-- ✅ Comprehensive Testing - 138+ tests (frontend + backend)
+### Authentic Jobs
 
-**See full history in [ROADMAP.md](./ROADMAP.md) Phase 7 sections.**
+- URL: https://authenticjobs.com/
+- Has RSS: https://authenticjobs.com/rss/index.xml
+- Categories: Design, Development, Creative
 
----
+### ArtStation Jobs
 
-## Useful Links
+- URL: https://www.artstation.com/jobs
+- Will need HTML scraping
+- Categories: 3D, Concept Art, Game Art, VFX, Animation
 
-- **Local Development:**
-  - Backend API: http://localhost:8000
-  - Swagger Docs: http://localhost:8000/docs
-  - Redoc: http://localhost:8000/redoc
-  - Frontend: http://localhost:5173
+### Behance Jobs
 
-- **Documentation:**
-  - [README.md](../README.md) - Quick start guide
-  - [ROADMAP.md](./ROADMAP.md) - Project phases and future features
-  - [ARCHITECTURE.md](./ARCHITECTURE.md) - Infrastructure and deployment
-  - [SCHEMA.md](./SCHEMA.md) - Database schema details
-  - [API.md](./API.md) - Complete API reference
-
-- **Repository:**
-  - GitHub: https://github.com/denisenanni/career-agent
+- URL: https://www.behance.net/joblist
+- Adobe-owned, may need scraping
+- Categories: Graphic Design, UI/UX, 3D, Motion
 
 ---
 
-## Git Workflow
+## Files to Create/Modify
 
-```bash
-# Standard workflow
-git status                    # Check changes
-git add .                     # Stage all changes
-git commit -m "feat: description"  # Commit with message
-git push                      # Push to remote
+**Create:**
+- `backend/app/scrapers/dribbble.py`
+- `backend/app/scrapers/authentic_jobs.py`
+- `backend/app/scrapers/artstation.py`
+- `backend/app/scrapers/behance.py`
 
-# Commit message format
-# feat: new feature
-# fix: bug fix
-# docs: documentation
-# test: add/update tests
-# refactor: code cleanup
-# chore: maintenance
-```
+**Modify:**
+- `backend/app/services/scraper.py` - Add new sources
+- `backend/app/routers/jobs.py` - Maybe add source filter param
 
 ---
 
-## Performance Tips
+## Testing
 
-- **React Query:** Automatic caching, refetch on window focus (5min stale time)
-- **Redis:** Cache all LLM calls (90% hit rate = major cost savings)
-- **Database:** Full-text search with PostgreSQL `tsvector` + GIN index
-- **Frontend:** Code splitting with React.lazy() for faster initial load
-- **Rate Limiting:** Protects against abuse and runaway API costs
-
----
-
-## UI/UX Patterns
-
-### Auto-Save
-Profile forms (PreferencesForm, ParsedCVDisplay) use auto-save with debounce:
-- **Hook:** `useAutoSave` in `src/hooks/useAutoSave.ts`
-- **Debounce:** 1.5 seconds after last change
-- **Status indicator:** Shows "Saving..." → "✓ Saved" → (fades after 2s)
-- **No save button needed** - changes persist automatically
-
-```typescript
-const { status, error } = useAutoSave({
-  data: formData,
-  onSave: async (data) => { await updateProfile(data) },
-  debounceMs: 1500,
-  enabled: isInitialized,
-})
-```
+1. Run each scraper individually and verify job format
+2. Check deduplication works (run twice, no duplicates)
+3. Verify jobs appear in /jobs endpoint
+4. Test that creative jobs match creative CVs (not dev CVs)
 
 ---
 
-## Technical Debt
+## Notes
 
-See current technical debt tracked in ROADMAP.md.
----
-
-## Security Checklist
-
-**Always verify:**
-- [ ] No secrets in code (use .env)
-- [ ] No `any` types that bypass validation
-- [ ] Input validation on all API endpoints
-- [ ] SQL injection protection (use SQLAlchemy ORM)
-- [ ] XSS protection (React escapes by default)
-- [ ] Authentication on protected routes
-- [ ] Rate limiting on expensive operations
-- [ ] CORS configured correctly for production
-
----
-
-## Common Gotchas
-
-1. **Frontend:** Always use `yarn`, not `npm` (workspace project)
-2. **Backend:** Always create migrations, never modify schema directly
-3. **Tests:** Backend tests need `TEST_DATABASE_URL` env var for PostgreSQL
-4. **TypeScript:** Excluding `*.test.ts` files from build (in tsconfig.json)
-5. **LLM Costs:** Always check cache before making Claude API call
-6. **Git:** Never force push to main branch
-
----
-
-**For roadmap, pending features, and future plans → [ROADMAP.md](./ROADMAP.md)**
-
+- No UI changes needed - matching algorithm handles relevance
+- No new database columns needed
+- Start with Dribbble (has API), then add others
+- Be respectful with scraping - add delays, respect robots.txt

@@ -40,6 +40,7 @@ class JobSource(str, Enum):
     """Valid job sources"""
     remoteok = "remoteok"
     weworkremotely = "weworkremotely"
+    authenticjobs = "authenticjobs"
 
 
 def truncate_description(description: str, max_length: int = 500) -> str:
@@ -203,6 +204,17 @@ async def run_scraper():
     except Exception as e:
         logger.error(f"Jobicy scraper failed: {str(e)}", exc_info=True)
         all_stats["jobicy"] = {"error": str(e)}
+
+    # Authentic Jobs
+    try:
+        logger.info("Starting Authentic Jobs scraper...")
+        from app.scrapers.authenticjobs import scrape_and_save as authenticjobs_scrape
+        stats = await authenticjobs_scrape()
+        all_stats["authenticjobs"] = stats
+        logger.info(f"Authentic Jobs completed: {stats}")
+    except Exception as e:
+        logger.error(f"Authentic Jobs scraper failed: {str(e)}", exc_info=True)
+        all_stats["authenticjobs"] = {"error": str(e)}
 
     logger.info(f"All scrapers completed: {all_stats}")
     return all_stats
