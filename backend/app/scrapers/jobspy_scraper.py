@@ -97,12 +97,18 @@ def normalize_job(row: pd.Series) -> Optional[dict]:
         # Generate unique source_id from URL hash
         source_id = str(abs(hash(job_url)))
 
-        # Build location string
+        # Build location string (limited to 200 chars per schema)
         city = row.get("city") or ""
         state = row.get("state") or ""
         country = row.get("country") or ""
+        # Handle pandas NaN values
+        city = city if pd.notna(city) else ""
+        state = state if pd.notna(state) else ""
+        country = country if pd.notna(country) else ""
         location_parts = [p for p in [city, state, country] if p]
         location = ", ".join(location_parts) if location_parts else "Remote"
+        if len(location) > 200:
+            location = location[:197] + "..."
 
         # Determine remote type
         is_remote = row.get("is_remote", False)
@@ -120,13 +126,15 @@ def normalize_job(row: pd.Series) -> Optional[dict]:
         # Handle salary
         salary_min = row.get("min_amount")
         salary_max = row.get("max_amount")
-        salary_currency = row.get("currency") or "USD"
+        currency = row.get("currency")
+        salary_currency = currency if pd.notna(currency) and currency else "USD"
 
         # Convert salary to int if present
         if pd.notna(salary_min):
             salary_min = int(salary_min)
         else:
             salary_min = None
+            salary_currency = None  # No currency if no salary
 
         if pd.notna(salary_max):
             salary_max = int(salary_max)
@@ -167,16 +175,20 @@ def normalize_job(row: pd.Series) -> Optional[dict]:
         # Extract tags from title and description
         tags = extract_tags(title, description)
 
+        # Handle company (pandas NaN is truthy, so use pd.notna)
+        company = row.get("company")
+        company = company if pd.notna(company) and company else "Unknown"
+
         return {
             "source": source,
             "source_id": source_id,
             "url": job_url,
             "title": title,
-            "company": row.get("company") or "Unknown",
+            "company": company,
             "description": description,
             "salary_min": salary_min,
             "salary_max": salary_max,
-            "salary_currency": salary_currency if salary_min else None,
+            "salary_currency": salary_currency,
             "location": location,
             "remote_type": remote_type,
             "job_type": job_type,
