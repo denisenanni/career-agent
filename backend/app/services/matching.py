@@ -12,6 +12,224 @@ from app.utils.skill_clusters import calculate_skill_similarity, get_related_ski
 
 logger = logging.getLogger(__name__)
 
+# Career category definitions for filtering irrelevant jobs
+CAREER_CATEGORIES = {
+    "frontend": {"react", "vue", "angular", "css", "html", "javascript", "typescript", "tailwind", "sass", "next.js", "svelte"},
+    "backend": {"python", "java", "node.js", "django", "fastapi", "spring", "sql", "postgresql", "mongodb", "go", "rust", "c#", ".net", "ruby", "rails"},
+    "fullstack": {"react", "node.js", "python", "javascript", "typescript", "postgresql", "next.js"},
+    "mobile": {"react native", "flutter", "swift", "kotlin", "ios", "android", "xamarin"},
+    "devops": {"docker", "kubernetes", "terraform", "aws", "gcp", "azure", "ci/cd", "jenkins", "gitlab", "ansible", "linux"},
+    "data": {"python", "sql", "pandas", "spark", "machine learning", "tensorflow", "pytorch", "data science", "etl", "airflow", "dbt"},
+    "design": {"figma", "sketch", "adobe xd", "ui", "ux", "photoshop", "illustrator", "user research", "wireframing"},
+    "3d": {"blender", "maya", "zbrush", "3ds max", "cinema 4d", "unity", "unreal", "substance painter", "rigging", "3d modeling"},
+    "motion": {"after effects", "premiere", "motion graphics", "animation", "cinema 4d"},
+    "game": {"unity", "unreal", "godot", "c++", "game development", "game design"},
+}
+
+# Compatible category pairs (user category -> can match job category)
+COMPATIBLE_CATEGORIES = {
+    ("fullstack", "frontend"),
+    ("fullstack", "backend"),
+    ("frontend", "fullstack"),
+    ("backend", "fullstack"),
+    ("design", "frontend"),  # UI designers can do frontend
+    ("3d", "motion"),
+    ("motion", "3d"),
+    ("3d", "game"),
+    ("game", "3d"),
+}
+
+
+def infer_career_category(skills: List[str]) -> Optional[str]:
+    """
+    Infer user's primary career category from their skills.
+
+    Args:
+        skills: List of user's skills
+
+    Returns:
+        Primary career category string or None if no clear match
+    """
+    if not skills:
+        return None
+
+    skills_lower = {s.lower() for s in skills}
+
+    # Score each category by skill overlap
+    scores: Dict[str, int] = {}
+    for category, category_skills in CAREER_CATEGORIES.items():
+        overlap = len(skills_lower & category_skills)
+        if overlap > 0:
+            scores[category] = overlap
+
+    if not scores:
+        return None
+
+    # Return category with highest overlap
+    return max(scores, key=scores.get)
+
+
+def infer_job_category(job_title: str, job_skills: List[str]) -> Optional[str]:
+    """
+    Infer job's career category from title and required skills.
+
+    Args:
+        job_title: Job title string
+        job_skills: List of required skills
+
+    Returns:
+        Job category string or None if no clear match
+    """
+    # First try to infer from skills
+    category = infer_career_category(job_skills)
+    if category:
+        return category
+
+    # Fall back to job title keywords
+    title_lower = job_title.lower()
+    title_keywords = {
+        "frontend": ["frontend", "front-end", "front end", "ui developer", "react developer", "vue developer"],
+        "backend": ["backend", "back-end", "back end", "server", "api developer", "python developer", "java developer"],
+        "fullstack": ["fullstack", "full-stack", "full stack"],
+        "mobile": ["mobile", "ios", "android", "react native", "flutter"],
+        "devops": ["devops", "sre", "site reliability", "infrastructure", "platform engineer", "cloud engineer"],
+        "data": ["data engineer", "data scientist", "ml engineer", "machine learning", "analytics"],
+        "design": ["designer", "ux", "ui/ux", "product design"],
+        "3d": ["3d artist", "3d modeler", "character artist", "environment artist"],
+        "motion": ["motion", "animator", "video editor"],
+        "game": ["game developer", "game programmer", "game designer"],
+    }
+
+    for category, keywords in title_keywords.items():
+        if any(kw in title_lower for kw in keywords):
+            return category
+
+    return None
+
+
+def categories_compatible(user_category: str, job_category: str) -> bool:
+    """
+    Check if user's career category is compatible with job category.
+
+    Args:
+        user_category: User's inferred career category
+        job_category: Job's inferred career category
+
+    Returns:
+        True if categories are compatible, False otherwise
+    """
+    # Same category is always compatible
+    if user_category == job_category:
+        return True
+
+    # Check explicit compatibility pairs
+    return (user_category, job_category) in COMPATIBLE_CATEGORIES
+
+
+def should_match_career_category(
+    user_skills: List[str],
+    job_title: str,
+    job_skills: List[str]
+) -> bool:
+    """
+    Hard filter: Check if job's career category matches user's profile.
+
+    This prevents clearly irrelevant matches like:
+    - 3D artist getting Python backend jobs
+    - Designer getting DevOps jobs
+
+    Args:
+        user_skills: User's skills list
+        job_title: Job title
+        job_skills: Job's required skills
+
+    Returns:
+        True if job should be considered, False to skip
+    """
+    user_category = infer_career_category(user_skills)
+    job_category = infer_job_category(job_title, job_skills)
+
+    # If we can't infer either category, allow the match
+    if not user_category or not job_category:
+        return True
+
+    # Check compatibility
+    if categories_compatible(user_category, job_category):
+        return True
+
+    logger.info(f"Category mismatch: user is '{user_category}', job is '{job_category}'")
+    return False
+
+
+def calculate_skill_match_ratio(user_skills: List[str], job_skills: List[str]) -> Tuple[float, int, int]:
+    """
+    Calculate the ratio of matched skills to required skills.
+
+    Args:
+        user_skills: User's skills
+        job_skills: Job's required skills
+
+    Returns:
+        Tuple of (match_ratio, matched_count, total_required)
+    """
+    if not job_skills:
+        return 0.0, 0, 0
+
+    user_skills_lower = {normalize_skill(s) for s in user_skills}
+    job_skills_lower = {normalize_skill(s) for s in job_skills}
+
+    # Count exact matches
+    matched = user_skills_lower & job_skills_lower
+
+    # Also count semantic matches (via skill clusters)
+    for job_skill in job_skills_lower - matched:
+        for user_skill in user_skills_lower:
+            similarity = calculate_skill_similarity(user_skill, job_skill)
+            if similarity >= 0.5:  # Related skill
+                matched.add(job_skill)
+                break
+
+    match_ratio = len(matched) / len(job_skills_lower) if job_skills_lower else 0.0
+    return match_ratio, len(matched), len(job_skills_lower)
+
+
+def should_match_minimum_skills(
+    user_skills: List[str],
+    job_skills: List[str],
+    min_ratio: float = 0.2
+) -> bool:
+    """
+    Hard filter: Require minimum skill overlap ratio.
+
+    For jobs with 3+ required skills, require at least 20% match.
+    For jobs with fewer skills, require at least 1 match.
+
+    Args:
+        user_skills: User's skills
+        job_skills: Job's required skills
+        min_ratio: Minimum match ratio (default 0.2 = 20%)
+
+    Returns:
+        True if minimum skill overlap is met, False otherwise
+    """
+    if not job_skills:
+        return True  # No requirements = accept all
+
+    match_ratio, matched_count, total_required = calculate_skill_match_ratio(user_skills, job_skills)
+
+    # For jobs with 3+ skills, require 20% match
+    if total_required >= 3:
+        if match_ratio < min_ratio:
+            logger.info(f"Skill ratio {match_ratio:.1%} below threshold {min_ratio:.0%} ({matched_count}/{total_required})")
+            return False
+
+    # For jobs with 1-2 skills, require at least 1 match
+    elif matched_count == 0:
+        logger.info(f"No skill overlap (0/{total_required})")
+        return False
+
+    return True
+
 
 def calculate_skill_match(user_skills: List[str], job_requirements: Dict[str, Any]) -> Tuple[float, List[str], List[str], List[str]]:
     """
@@ -619,15 +837,19 @@ async def create_match_for_job(
             logger.info(f"Job {job.id} seniority '{job_seniority}' doesn't match user {user.id} preference '{user_prefs.get('seniority_filter')}'")
             return None
 
+        # Hard filter: Career category mismatch (e.g., 3D artist vs backend job)
+        user_skills = user.skills or []
+        if not should_match_career_category(user_skills, job.title, required_skills):
+            logger.info(f"Job {job.id} career category doesn't match user {user.id} profile - skipping")
+            return None
+
+        # Hard filter: Minimum skill overlap (20% for jobs with 3+ skills)
+        if not should_match_minimum_skills(user_skills, required_skills):
+            logger.info(f"Job {job.id} below minimum skill overlap for user {user.id} - skipping")
+            return None
+
         # Calculate match score
         score, analysis = calculate_match_score(user, job, job_requirements)
-
-        # Hard filter: Require at least 1 skill match (exact or related)
-        matching_skills = analysis.get("matching_skills", [])
-        related_skills = analysis.get("related_skills", [])
-        if not matching_skills and not related_skills:
-            logger.info(f"Job {job.id} has no skill overlap with user {user.id} - skipping")
-            return None
 
         # Only create match if score meets threshold
         if score < min_score:

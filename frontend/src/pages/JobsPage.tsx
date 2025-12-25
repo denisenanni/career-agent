@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { JobCard } from '../components/JobCard'
 import { SkeletonList } from '../components/SkeletonCard'
+import { Pagination } from '../components/Pagination'
 import { fetchJobs, refreshJobs } from '../api/jobs'
 import { useAuth } from '../contexts/AuthContext'
 import type { JobFilters } from '../types'
@@ -10,15 +11,15 @@ export function JobsPage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
-  const [limit] = useState(50)
-  const [offset, setOffset] = useState(0)
+  const [page, setPage] = useState(1)
+  const perPage = 20
 
   // Memoize filters to prevent unnecessary re-renders
   const filters = useMemo<JobFilters>(() => ({
-    limit,
-    offset,
+    page,
+    per_page: perPage,
     search: search || undefined,
-  }), [limit, offset, search])
+  }), [page, perPage, search])
 
   // Use React Query for data fetching with caching
   const { data, isLoading } = useQuery({
@@ -28,7 +29,11 @@ export function JobsPage() {
   })
 
   const jobs = data?.jobs ?? []
-  const total = data?.total ?? 0
+  const pagination = data?.pagination
+  const total = pagination?.total ?? 0
+  const totalPages = pagination?.total_pages ?? 0
+  const hasNext = pagination?.has_next ?? false
+  const hasPrev = pagination?.has_prev ?? false
 
   // Mutation for refreshing jobs (triggers scraper) - admin only
   const refreshMutation = useMutation({
@@ -43,7 +48,7 @@ export function JobsPage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    setOffset(0) // Reset to first page on new search
+    setPage(1) // Reset to first page on new search
   }
 
   return (
@@ -83,7 +88,7 @@ export function JobsPage() {
             type="button"
             onClick={() => {
               setSearch('')
-              setOffset(0)
+              setPage(1)
             }}
             className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300"
           >
@@ -111,11 +116,21 @@ export function JobsPage() {
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {jobs.map((job) => (
-            <JobCard key={job.id} job={job} />
-          ))}
-        </div>
+        <>
+          <div className="space-y-4">
+            {jobs.map((job) => (
+              <JobCard key={job.id} job={job} />
+            ))}
+          </div>
+
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            hasNext={hasNext}
+            hasPrev={hasPrev}
+          />
+        </>
       )}
     </div>
   )

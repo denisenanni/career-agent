@@ -12,7 +12,8 @@ from app.database import get_db
 from app.models.job import Job
 from app.models.scrape_log import ScrapeLog
 from app.models.user import User
-from app.schemas.job import JobsResponse, JobDetail, JobListItem, ScrapeLogResponse
+from app.schemas.job import JobsResponse, JobDetail, JobListItem, ScrapeLogResponse, PaginationInfo
+from math import ceil
 from app.dependencies.auth import get_current_user
 from app.config import settings
 
@@ -64,8 +65,8 @@ async def list_jobs(
     remote_type: Optional[RemoteType] = None,
     min_salary: Optional[int] = Query(None, ge=0),
     search: Optional[str] = Query(None, max_length=200),
-    limit: int = Query(default=50, le=100, ge=1),
-    offset: int = Query(default=0, ge=0),
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
     """
@@ -76,8 +77,8 @@ async def list_jobs(
     - **remote_type**: Filter by remote type (full, hybrid, onsite)
     - **min_salary**: Minimum salary filter
     - **search**: Search in title, company, and description
-    - **limit**: Number of results per page (max 100)
-    - **offset**: Pagination offset
+    - **page**: Page number (starts at 1)
+    - **per_page**: Number of results per page (max 100)
     """
     query = db.query(Job)
 
@@ -97,13 +98,16 @@ async def list_jobs(
             text("search_vector @@ plainto_tsquery('english', :search)")
         ).params(search=search)
 
+    # Calculate offset from page
+    offset = (page - 1) * per_page
+
     # Optimize: Use window function to get count in same query (single DB hit instead of two)
     # Add row count as a window function
     count_column = func.count().over().label('total_count')
     query_with_count = query.add_columns(count_column)
 
     # Get paginated results with count
-    results = query_with_count.order_by(Job.scraped_at.desc()).offset(offset).limit(limit).all()
+    results = query_with_count.order_by(Job.scraped_at.desc()).offset(offset).limit(per_page).all()
 
     # Extract jobs and total count
     if results:
@@ -112,6 +116,9 @@ async def list_jobs(
     else:
         jobs = []
         total = 0
+
+    # Calculate pagination metadata
+    total_pages = ceil(total / per_page) if total > 0 else 0
 
     # Convert to response models with truncated descriptions
     job_items = []
@@ -138,9 +145,14 @@ async def list_jobs(
 
     return JobsResponse(
         jobs=job_items,
-        total=total,
-        limit=limit,
-        offset=offset,
+        pagination=PaginationInfo(
+            page=page,
+            per_page=per_page,
+            total=total,
+            total_pages=total_pages,
+            has_next=page < total_pages,
+            has_prev=page > 1,
+        ),
     )
 
 

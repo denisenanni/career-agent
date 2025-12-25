@@ -1,7 +1,7 @@
 """
 Insights service for market skill analysis and career recommendations
 """
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Set
 import logging
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -9,8 +9,137 @@ from collections import Counter
 from app.models import Job, User, SkillAnalysis
 from app.services.llm import extract_job_requirements
 from app.utils.skill_aliases import normalize_skill
+from app.services.matching import infer_career_category, CAREER_CATEGORIES
 
 logger = logging.getLogger(__name__)
+
+# Skill relationship paths: maps skills to commonly paired skills
+# These are based on typical career progressions and complementary technologies
+SKILL_PATHS = {
+    # Frontend paths
+    "react": ["typescript", "next.js", "redux", "tailwind css", "testing library", "jest", "graphql"],
+    "vue": ["typescript", "nuxt", "vuex", "pinia", "vite"],
+    "angular": ["typescript", "rxjs", "ngrx", "jasmine"],
+    "javascript": ["typescript", "react", "node.js", "webpack"],
+    "typescript": ["react", "node.js", "next.js", "graphql"],
+    "html": ["css", "javascript", "react", "accessibility"],
+    "css": ["tailwind css", "sass", "css-in-js", "responsive design"],
+    "tailwind css": ["react", "next.js", "headless ui"],
+    "next.js": ["react", "typescript", "vercel", "prisma"],
+
+    # Backend paths
+    "python": ["fastapi", "django", "postgresql", "redis", "docker", "aws", "celery"],
+    "fastapi": ["python", "postgresql", "docker", "sqlalchemy", "pydantic"],
+    "django": ["python", "postgresql", "celery", "redis", "docker"],
+    "node.js": ["typescript", "express", "postgresql", "mongodb", "docker", "graphql"],
+    "java": ["spring boot", "hibernate", "postgresql", "kafka", "kubernetes", "maven"],
+    "go": ["docker", "kubernetes", "postgresql", "grpc", "microservices"],
+    "ruby": ["rails", "postgresql", "redis", "sidekiq"],
+    "postgresql": ["sql", "redis", "docker", "data modeling"],
+    "mongodb": ["node.js", "mongoose", "redis"],
+
+    # DevOps paths
+    "docker": ["kubernetes", "terraform", "ci/cd", "aws", "linux"],
+    "kubernetes": ["docker", "helm", "istio", "prometheus", "gitops", "terraform"],
+    "aws": ["terraform", "cloudformation", "lambda", "ecs", "docker"],
+    "terraform": ["aws", "azure", "gcp", "ansible", "infrastructure as code"],
+    "ci/cd": ["github actions", "gitlab ci", "jenkins", "docker"],
+
+    # Data paths
+    "pandas": ["python", "sql", "numpy", "data analysis", "jupyter"],
+    "sql": ["postgresql", "data modeling", "dbt", "analytics"],
+    "machine learning": ["python", "tensorflow", "pytorch", "scikit-learn", "deep learning"],
+    "tensorflow": ["python", "keras", "deep learning", "mlops"],
+    "pytorch": ["python", "deep learning", "nlp", "computer vision"],
+    "spark": ["python", "sql", "airflow", "databricks", "scala"],
+
+    # Design paths
+    "figma": ["prototyping", "design systems", "user research", "adobe xd"],
+    "ui": ["figma", "design systems", "accessibility", "motion design", "css"],
+    "ux": ["user research", "usability testing", "wireframing", "prototyping", "figma"],
+    "adobe xd": ["figma", "prototyping", "illustrator"],
+
+    # 3D paths
+    "blender": ["substance painter", "zbrush", "unity", "unreal", "rigging", "3d modeling"],
+    "maya": ["zbrush", "substance painter", "rigging", "animation", "3d modeling"],
+    "zbrush": ["maya", "blender", "substance painter", "sculpting"],
+    "unity": ["c#", "shader programming", "vfx", "game development", "ar/vr"],
+    "unreal": ["blueprints", "c++", "vfx", "game development", "nanite", "lumen"],
+    "substance painter": ["blender", "maya", "texturing", "pbr"],
+
+    # Motion/Video paths
+    "after effects": ["premiere", "cinema 4d", "illustrator", "motion graphics"],
+    "premiere": ["after effects", "davinci resolve", "video editing"],
+    "cinema 4d": ["after effects", "3d motion", "octane render"],
+    "animation": ["rigging", "character animation", "storyboarding", "blender", "maya"],
+
+    # Mobile paths
+    "react native": ["typescript", "react", "redux", "expo"],
+    "flutter": ["dart", "firebase", "mobile development"],
+    "swift": ["ios", "xcode", "swiftui", "uikit"],
+    "kotlin": ["android", "jetpack compose", "coroutines"],
+}
+
+# Category labels for UI display
+CATEGORY_LABELS = {
+    "frontend": "Frontend Development",
+    "backend": "Backend Development",
+    "fullstack": "Full-Stack Development",
+    "mobile": "Mobile Development",
+    "devops": "DevOps & Infrastructure",
+    "data": "Data & Machine Learning",
+    "design": "UI/UX Design",
+    "3d": "3D Art & Modeling",
+    "motion": "Motion Graphics & Animation",
+    "game": "Game Development",
+}
+
+
+def get_related_skills_for_user(user_skills: List[str]) -> Dict[str, Dict[str, Any]]:
+    """
+    Find skills that are related to the user's existing skills.
+
+    This is the core of profile-aware recommendations:
+    - Only suggest skills that build on what user already knows
+    - If user has no skills in SKILL_PATHS, return empty (no generic suggestions)
+
+    Args:
+        user_skills: List of user's current skills
+
+    Returns:
+        Dictionary of related skills with metadata:
+        {
+            "skill": {
+                "source_skill": str,  # Which user skill this relates to
+                "reason": str,        # Why this is recommended
+            }
+        }
+    """
+    if not user_skills:
+        return {}
+
+    user_skills_lower = {s.lower() for s in user_skills}
+    related_skills: Dict[str, Dict[str, Any]] = {}
+
+    for user_skill in user_skills_lower:
+        # Check if this skill has related skills defined
+        if user_skill in SKILL_PATHS:
+            for related in SKILL_PATHS[user_skill]:
+                related_lower = related.lower()
+                # Skip if user already has this skill
+                if related_lower in user_skills_lower:
+                    continue
+                # Skip if we already found this skill from another source
+                if related_lower in related_skills:
+                    continue
+
+                related_skills[related_lower] = {
+                    "source_skill": user_skill,
+                    "reason": f"Commonly paired with {user_skill}",
+                    "original_name": related,  # Preserve original casing
+                }
+
+    return related_skills
 
 
 def analyze_market_skills(db: Session, limit: Optional[int] = None) -> Dict[str, Dict[str, Any]]:
@@ -137,12 +266,16 @@ def generate_skill_recommendations(
     top_n: int = 10
 ) -> List[Dict[str, Any]]:
     """
-    Generate prioritized skill recommendations for user
+    Generate prioritized skill recommendations for user.
+
+    IMPORTANT: Recommendations are based PRIMARILY on user's existing skills.
+    If the user has no skills that map to known skill paths, return an empty list
+    rather than generic market-based suggestions.
 
     Args:
         user: User object
         market_skills: Market skill data
-        skill_gaps: Skills user is missing
+        skill_gaps: Skills user is missing (market-wide)
         top_n: Number of top recommendations to return
 
     Returns:
@@ -156,47 +289,62 @@ def generate_skill_recommendations(
             "learning_effort": "low" | "medium" | "high"
         }
     """
+    user_skills = user.skills or []
+    if not user_skills:
+        logger.info("User has no skills - cannot generate profile-aware recommendations")
+        return []
+
+    # Get skills related to user's existing skills
+    related_skills = get_related_skills_for_user(user_skills)
+
+    if not related_skills:
+        # User has skills but none of them are in our skill paths
+        # This means we can't suggest anything relevant to their profile
+        logger.info(f"No related skills found for user's skills: {user_skills}")
+        return []
+
     recommendations = []
+    user_skills_normalized = {normalize_skill(s) for s in user_skills}
 
-    # Get user's current skills (normalized)
-    user_skills_normalized = {normalize_skill(s) for s in (user.skills or [])}
+    # Only recommend skills that are:
+    # 1. Related to user's existing skills (from SKILL_PATHS)
+    # 2. Have market demand (appear in job postings)
+    for skill_key, skill_info in related_skills.items():
+        # Check if this skill appears in the market
+        skill_data = market_skills.get(skill_key)
 
-    for skill_gap in skill_gaps:
-        skill_data = market_skills.get(skill_gap)
-        if not skill_data:
-            continue
+        # If not in market data, still include but with lower priority
+        frequency = skill_data["frequency"] if skill_data else 0.0
+        avg_salary = skill_data.get("avg_salary") if skill_data else None
 
-        frequency = skill_data["frequency"]
-        avg_salary = skill_data.get("avg_salary")
-
-        # Determine priority based on frequency and salary
-        if frequency >= 20.0:
+        # Determine priority:
+        # - Related skills that are in high demand = high priority
+        # - Related skills with some demand = medium priority
+        # - Related skills with low/no market data = low priority (still relevant to user's path)
+        if frequency >= 15.0:
             priority = "high"
-        elif frequency >= 10.0:
+        elif frequency >= 5.0:
             priority = "medium"
         else:
             priority = "low"
 
-        # Generate reason
-        reason_parts = []
-        if frequency >= 20.0:
-            reason_parts.append(f"Required in {frequency:.0f}% of jobs")
-        elif frequency >= 10.0:
-            reason_parts.append(f"Common requirement ({frequency:.0f}% of jobs)")
-        else:
-            reason_parts.append(f"Growing demand ({frequency:.0f}% of jobs)")
+        # Generate reason - emphasize the relationship to user's skills
+        reason_parts = [skill_info["reason"]]
+        if frequency >= 10.0:
+            reason_parts.append(f"in demand ({frequency:.0f}% of jobs)")
+        elif frequency >= 5.0:
+            reason_parts.append(f"growing demand ({frequency:.0f}% of jobs)")
 
         if avg_salary:
-            reason_parts.append(f"avg salary ${avg_salary:,.0f}")
+            reason_parts.append(f"avg ${avg_salary:,.0f}")
 
         reason = ", ".join(reason_parts)
 
-        # Estimate learning effort (simplified heuristic)
-        # This is a placeholder - could be enhanced with skill taxonomy/relationships
-        learning_effort = estimate_learning_effort(skill_gap, user_skills_normalized)
+        # Estimate learning effort
+        learning_effort = estimate_learning_effort(skill_key, user_skills_normalized)
 
         recommendations.append({
-            "skill": skill_gap,
+            "skill": skill_info.get("original_name", skill_key),
             "priority": priority,
             "reason": reason,
             "frequency": frequency,

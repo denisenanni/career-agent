@@ -186,12 +186,20 @@ class JobDetail(JobBase):
     raw_data: Optional[dict] = None
 
 
+class PaginationInfo(BaseModel):
+    """Pagination metadata"""
+    page: int
+    per_page: int
+    total: int
+    total_pages: int
+    has_next: bool
+    has_prev: bool
+
+
 class JobsResponse(BaseModel):
     """Response schema for jobs list endpoint"""
     jobs: List[JobListItem]
-    total: int
-    limit: int
-    offset: int
+    pagination: PaginationInfo
 
 
 class ScrapeLogItem(BaseModel):

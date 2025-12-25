@@ -17,11 +17,18 @@ export interface Job {
   scraped_at: string | null
 }
 
+export interface PaginationInfo {
+  page: number
+  per_page: number
+  total: number
+  total_pages: number
+  has_next: boolean
+  has_prev: boolean
+}
+
 export interface JobsResponse {
   jobs: Job[]
-  total: number
-  limit: number
-  offset: number
+  pagination: PaginationInfo
 }
 
 export interface JobFilters {
@@ -30,8 +37,8 @@ export interface JobFilters {
   remote_type?: string
   min_salary?: number
   search?: string
-  limit?: number
-  offset?: number
+  page?: number
+  per_page?: number
 }
 
 // Router location state for redirects after auth
@@ -198,6 +205,9 @@ export interface SkillAnalysis {
   jobs_analyzed: number
   analysis_date: string
   requires_setup?: 'skills' | null
+  detected_category?: string | null
+  category_label?: string | null
+  note?: string | null
 }
 
 // Generation types

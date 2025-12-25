@@ -89,22 +89,23 @@ class TestListJobs:
         assert response.status_code == 200
         data = response.json()
 
-        assert data["total"] == 3
+        assert data["pagination"]["total"] == 3
         assert len(data["jobs"]) == 3
-        assert data["limit"] == 50
-        assert data["offset"] == 0
+        assert data["pagination"]["page"] == 1
+        assert data["pagination"]["per_page"] == 20
 
     def test_list_jobs_with_pagination(self, client, sample_jobs):
-        """Test pagination with limit and offset"""
-        response = client.get("/api/jobs?limit=2&offset=1")
+        """Test pagination with page and per_page"""
+        response = client.get("/api/jobs?page=1&per_page=2")
 
         assert response.status_code == 200
         data = response.json()
 
-        assert data["total"] == 3
+        assert data["pagination"]["total"] == 3
         assert len(data["jobs"]) == 2
-        assert data["limit"] == 2
-        assert data["offset"] == 1
+        assert data["pagination"]["per_page"] == 2
+        assert data["pagination"]["page"] == 1
+        assert data["pagination"]["has_next"] is True
 
     def test_filter_by_source(self, client, sample_jobs):
         """Test filtering jobs by source"""
@@ -113,7 +114,7 @@ class TestListJobs:
         assert response.status_code == 200
         data = response.json()
 
-        assert data["total"] == 2
+        assert data["pagination"]["total"] == 2
         assert all(job["source"] == "remoteok" for job in data["jobs"])
 
     def test_filter_by_job_type(self, client, sample_jobs):
@@ -123,7 +124,7 @@ class TestListJobs:
         assert response.status_code == 200
         data = response.json()
 
-        assert data["total"] == 2
+        assert data["pagination"]["total"] == 2
         assert all(job["job_type"] == "permanent" for job in data["jobs"])
 
     def test_filter_by_remote_type(self, client, sample_jobs):
@@ -133,7 +134,7 @@ class TestListJobs:
         assert response.status_code == 200
         data = response.json()
 
-        assert data["total"] == 2
+        assert data["pagination"]["total"] == 2
         assert all(job["remote_type"] == "full" for job in data["jobs"])
 
     def test_filter_by_min_salary(self, client, sample_jobs):
@@ -143,7 +144,7 @@ class TestListJobs:
         assert response.status_code == 200
         data = response.json()
 
-        assert data["total"] == 2
+        assert data["pagination"]["total"] == 2
         for job in data["jobs"]:
             assert job["salary_min"] >= 110000
 
@@ -155,7 +156,7 @@ class TestListJobs:
         assert response.status_code == 200
         data = response.json()
 
-        assert data["total"] == 1
+        assert data["pagination"]["total"] == 1
         assert "Python" in data["jobs"][0]["title"]
 
     @requires_postgresql
@@ -166,7 +167,7 @@ class TestListJobs:
         assert response.status_code == 200
         data = response.json()
 
-        assert data["total"] == 1
+        assert data["pagination"]["total"] == 1
         assert data["jobs"][0]["company"] == "TechCorp"
 
     @requires_postgresql
@@ -177,7 +178,7 @@ class TestListJobs:
         assert response.status_code == 200
         data = response.json()
 
-        assert data["total"] == 1
+        assert data["pagination"]["total"] == 1
         assert "infrastructure" in data["jobs"][0]["description"].lower()
 
     @requires_postgresql
@@ -189,7 +190,7 @@ class TestListJobs:
         data = response.json()
 
         # Should find no results since wildcards are escaped
-        assert data["total"] == 0
+        assert data["pagination"]["total"] == 0
 
     def test_multiple_filters_combined(self, client, sample_jobs):
         """Test combining multiple filters"""
@@ -198,7 +199,7 @@ class TestListJobs:
         assert response.status_code == 200
         data = response.json()
 
-        assert data["total"] == 2
+        assert data["pagination"]["total"] == 2
         for job in data["jobs"]:
             assert job["source"] == "remoteok"
             assert job["remote_type"] == "full"
@@ -233,20 +234,20 @@ class TestListJobs:
         assert len(test_job["description"]) == 503
         assert test_job["description"].endswith("...")
 
-    def test_limit_validation(self, client):
-        """Test limit parameter validation"""
-        # Limit too high
-        response = client.get("/api/jobs?limit=101")
+    def test_per_page_validation(self, client):
+        """Test per_page parameter validation"""
+        # per_page too high
+        response = client.get("/api/jobs?per_page=101")
         assert response.status_code == 422
 
-        # Limit too low
-        response = client.get("/api/jobs?limit=0")
+        # per_page too low
+        response = client.get("/api/jobs?per_page=0")
         assert response.status_code == 422
 
-    def test_offset_validation(self, client):
-        """Test offset parameter validation"""
-        # Negative offset
-        response = client.get("/api/jobs?offset=-1")
+    def test_page_validation(self, client):
+        """Test page parameter validation"""
+        # Page must be >= 1
+        response = client.get("/api/jobs?page=0")
         assert response.status_code == 422
 
     @requires_postgresql
@@ -257,7 +258,7 @@ class TestListJobs:
         assert response.status_code == 200
         data = response.json()
 
-        assert data["total"] == 0
+        assert data["pagination"]["total"] == 0
         assert data["jobs"] == []
 
     def test_jobs_ordered_by_scraped_at_desc(self, client, sample_jobs):

@@ -12,7 +12,8 @@ from slowapi.util import get_remote_address
 from app.database import get_db
 from app.models import User, SkillAnalysis
 from app.dependencies.auth import get_current_user
-from app.services.insights import run_skill_analysis_for_user
+from app.services.insights import run_skill_analysis_for_user, CATEGORY_LABELS
+from app.services.matching import infer_career_category
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -39,6 +40,9 @@ class SkillAnalysisResponse(BaseModel):
     jobs_analyzed: int
     analysis_date: str
     requires_setup: Optional[str] = None  # "skills" if user needs to add skills
+    detected_category: Optional[str] = None  # User's inferred career category
+    category_label: Optional[str] = None  # Human-readable category label
+    note: Optional[str] = None  # Explanation of recommendations basis
 
     class Config:
         from_attributes = True
@@ -91,6 +95,18 @@ async def get_skill_insights(
             SkillRecommendation(**rec) for rec in analysis.recommendations
         ]
 
+        # Detect user's career category
+        detected_category = infer_career_category(current_user.skills or [])
+        category_label = CATEGORY_LABELS.get(detected_category) if detected_category else None
+
+        # Generate note explaining recommendations
+        if detected_category and recommendations:
+            note = f"Recommendations based on your {category_label} background"
+        elif not recommendations:
+            note = "Add more skills to your profile to get personalized recommendations"
+        else:
+            note = None
+
         return SkillAnalysisResponse(
             user_skills=analysis.user_skills,
             skill_gaps=analysis.skill_gaps,
@@ -98,6 +114,9 @@ async def get_skill_insights(
             market_skills=analysis.market_skills,
             jobs_analyzed=analysis.jobs_analyzed,
             analysis_date=analysis.analysis_date.isoformat(),
+            detected_category=detected_category,
+            category_label=category_label,
+            note=note,
         )
 
     except HTTPException:
@@ -149,6 +168,18 @@ async def refresh_skill_insights(
             SkillRecommendation(**rec) for rec in analysis.recommendations
         ]
 
+        # Detect user's career category
+        detected_category = infer_career_category(current_user.skills or [])
+        category_label = CATEGORY_LABELS.get(detected_category) if detected_category else None
+
+        # Generate note explaining recommendations
+        if detected_category and recommendations:
+            note = f"Recommendations based on your {category_label} background"
+        elif not recommendations:
+            note = "Add more skills to your profile to get personalized recommendations"
+        else:
+            note = None
+
         return SkillAnalysisResponse(
             user_skills=analysis.user_skills,
             skill_gaps=analysis.skill_gaps,
@@ -156,6 +187,9 @@ async def refresh_skill_insights(
             market_skills=analysis.market_skills,
             jobs_analyzed=analysis.jobs_analyzed,
             analysis_date=analysis.analysis_date.isoformat(),
+            detected_category=detected_category,
+            category_label=category_label,
+            note=note,
         )
 
     except HTTPException:

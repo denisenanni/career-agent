@@ -119,14 +119,32 @@ export function InsightsPage() {
           {/* Skill Recommendations */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Recommended Skills to Learn</h2>
-            <p className="text-gray-600 mb-4">
-              Based on market analysis, here are the top skills that could boost your career prospects:
-            </p>
+
+            {/* Show detected category and note */}
+            {data.category_label && (
+              <div className="mb-4 flex items-center gap-2">
+                <span className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm font-medium">
+                  {data.category_label}
+                </span>
+                {data.note && (
+                  <p className="text-sm text-gray-500">{data.note}</p>
+                )}
+              </div>
+            )}
+
+            {!data.category_label && data.note && (
+              <p className="text-gray-500 mb-4 text-sm">{data.note}</p>
+            )}
 
             {data.recommendations.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">
-                Great! You already have all the top in-demand skills.
-              </p>
+              <div className="text-center py-6 bg-gray-50 rounded-lg">
+                <p className="text-gray-600 font-medium">No recommendations available</p>
+                <p className="text-gray-500 text-sm mt-1">
+                  {data.user_skills.length === 0
+                    ? 'Add skills to your profile to get personalized recommendations.'
+                    : 'We couldn\'t find skills related to your current expertise. Try adding more skills to your profile.'}
+                </p>
+              </div>
             ) : (
               <div className="space-y-3">
                 {data.recommendations.map((rec, idx) => (
@@ -166,7 +184,14 @@ export function InsightsPage() {
 
           {/* Your Skills */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Your Current Skills</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Your Current Skills</h2>
+              {data.category_label && (
+                <span className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm font-medium">
+                  {data.category_label}
+                </span>
+              )}
+            </div>
             <div className="flex flex-wrap gap-2">
               {data.user_skills.length === 0 ? (
                 <p className="text-gray-500">No skills added yet</p>
@@ -176,7 +201,7 @@ export function InsightsPage() {
                     key={idx}
                     className="px-3 py-1 bg-green-50 text-green-700 rounded-full text-sm font-medium border border-green-200"
                   >
-                    ✓ {skill}
+                    {skill}
                   </span>
                 ))
               )}
