@@ -11,9 +11,13 @@ Uses the python-jobspy library to scrape multiple job boards:
 We start with Indeed + Google only for safety.
 """
 
+import hashlib
 import logging
+import re
 from datetime import datetime
 from typing import Optional
+from urllib.parse import parse_qs, urlparse
+
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -75,6 +79,51 @@ def fetch_jobs(
     return jobs_df
 
 
+def extract_job_id_from_url(url: str, site: str) -> str:
+    """
+    Extract a stable job ID from the job URL.
+
+    Uses URL parsing to extract actual job IDs when possible,
+    falls back to SHA256 hash for URLs without extractable IDs.
+    """
+    parsed = urlparse(url)
+
+    # Indeed: https://www.indeed.com/viewjob?jk=57b57140162e982e
+    if site == "indeed" or "indeed.com" in parsed.netloc:
+        params = parse_qs(parsed.query)
+        if "jk" in params:
+            return params["jk"][0]
+
+    # Google Jobs: various formats, try to extract ID from path or query
+    if site == "google" or "google.com" in parsed.netloc:
+        # Google jobs often have htidocid parameter
+        params = parse_qs(parsed.query)
+        if "htidocid" in params:
+            return params["htidocid"][0]
+
+    # LinkedIn: https://www.linkedin.com/jobs/view/123456789
+    if site == "linkedin" or "linkedin.com" in parsed.netloc:
+        match = re.search(r"/jobs/view/(\d+)", parsed.path)
+        if match:
+            return match.group(1)
+
+    # Glassdoor: extract job ID from URL path
+    if site == "glassdoor" or "glassdoor.com" in parsed.netloc:
+        match = re.search(r"jobListingId=(\d+)", url)
+        if match:
+            return match.group(1)
+
+    # ZipRecruiter: extract from path
+    if site == "zip_recruiter" or "ziprecruiter.com" in parsed.netloc:
+        # Path often ends with job ID
+        match = re.search(r"/([a-f0-9]{32})", parsed.path)
+        if match:
+            return match.group(1)
+
+    # Fallback: use SHA256 hash (deterministic unlike Python's hash())
+    return hashlib.sha256(url.encode()).hexdigest()[:16]
+
+
 def normalize_job(row: pd.Series) -> Optional[dict]:
     """
     Convert JobSpy DataFrame row to standard job format.
@@ -94,8 +143,11 @@ def normalize_job(row: pd.Series) -> Optional[dict]:
         if not job_url:
             return None
 
-        # Generate unique source_id from URL hash
-        source_id = str(abs(hash(job_url)))
+        # Get site early so we can use it to extract job ID
+        site = row.get("site", "unknown")
+
+        # Extract stable job ID from URL
+        source_id = extract_job_id_from_url(job_url, site)
 
         # Build location string (limited to 200 chars per schema)
         city = row.get("city") or ""
@@ -119,8 +171,7 @@ def normalize_job(row: pd.Series) -> Optional[dict]:
         else:
             remote_type = "onsite"
 
-        # Get site name for source
-        site = row.get("site", "unknown")
+        # Build source from site (already retrieved above)
         source = f"jobspy_{site}"
 
         # Handle salary
