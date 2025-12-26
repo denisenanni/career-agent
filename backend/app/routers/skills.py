@@ -36,6 +36,71 @@ SKILL_BLACKLIST = {
 }
 
 
+@router.get("/from-jobs")
+async def get_skills_from_jobs(
+    search: str = Query(default=None, min_length=1, max_length=100),
+    limit: int = Query(default=50, le=200, ge=10),
+    db: Session = Depends(get_db)
+):
+    """
+    Get skills extracted from job postings for filter UI.
+
+    Returns skills sorted by frequency (most common first) with job counts.
+    This is optimized for the skills filter dropdown in the jobs listing.
+
+    - **search**: Optional search term to filter skills by name (case-insensitive)
+    - **limit**: Maximum number of skills to return (10-200, default 50)
+
+    Returns list of skills with frequency count: [{"skill": "React", "count": 150}, ...]
+    """
+    try:
+        # Get skills from job tags with frequency
+        job_skills_query = text("""
+            SELECT
+                json_array_elements_text(tags::json) as skill,
+                COUNT(*) as frequency
+            FROM jobs
+            WHERE tags IS NOT NULL
+              AND json_array_length(tags::json) > 0
+            GROUP BY skill
+            ORDER BY frequency DESC
+        """)
+
+        job_result = db.execute(job_skills_query)
+        job_skills = {row[0]: row[1] for row in job_result}
+
+        # Filter out blacklisted/generic terms
+        filtered_skills = {
+            skill: freq for skill, freq in job_skills.items()
+            if skill.lower() not in SKILL_BLACKLIST and len(skill) > 1
+        }
+
+        # If search term provided, filter by name match (case-insensitive)
+        if search:
+            search_lower = search.lower()
+            filtered_skills = {
+                skill: freq for skill, freq in filtered_skills.items()
+                if search_lower in skill.lower()
+            }
+
+        # Sort by frequency and take top N
+        sorted_skills = sorted(filtered_skills.items(), key=lambda x: x[1], reverse=True)[:limit]
+
+        skills_with_count = [{"skill": skill, "count": count} for skill, count in sorted_skills]
+
+        logger.info(f"Returning {len(skills_with_count)} skills from jobs (search={search})")
+
+        return {
+            "skills": skills_with_count
+        }
+
+    except Exception as e:
+        logger.error(f"Error fetching skills from jobs: {e}")
+        return {
+            "skills": []
+        }
+
+
 @router.get("/popular")
 async def get_popular_skills(
     limit: int = Query(default=200, le=500, ge=10),

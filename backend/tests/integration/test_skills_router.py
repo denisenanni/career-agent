@@ -358,6 +358,58 @@ class TestAddCustomSkill:
             assert "error" in data or data.get("created") is False
 
 
+class TestGetSkillsFromJobs:
+    """Test GET /api/skills/from-jobs endpoint"""
+
+    def test_get_skills_from_jobs_empty(self, client):
+        """Test getting skills when no jobs exist"""
+        response = client.get("/api/skills/from-jobs")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert "skills" in data
+        assert isinstance(data["skills"], list)
+
+    @requires_postgres
+    def test_get_skills_from_jobs_with_jobs(self, client, multiple_jobs_with_tags):
+        """Test getting skills from job tags with counts"""
+        response = client.get("/api/skills/from-jobs")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert len(data["skills"]) > 0
+        # Each skill should have skill name and count
+        assert all("skill" in s and "count" in s for s in data["skills"])
+        # Python appears in 2 jobs, should have count >= 2
+        python_skill = next((s for s in data["skills"] if s["skill"] == "Python"), None)
+        assert python_skill is not None
+        assert python_skill["count"] >= 2
+
+    @requires_postgres
+    def test_get_skills_from_jobs_with_search(self, client, multiple_jobs_with_tags):
+        """Test filtering skills by search term"""
+        response = client.get("/api/skills/from-jobs?search=React")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should find React
+        skill_names = [s["skill"] for s in data["skills"]]
+        assert "React" in skill_names
+
+    @requires_postgres
+    def test_get_skills_from_jobs_with_limit(self, client, multiple_jobs_with_tags):
+        """Test limiting number of skills returned"""
+        response = client.get("/api/skills/from-jobs?limit=2")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert len(data["skills"]) <= 2
+
+
 class TestGetPopularSkillsErrorHandling:
     """Test error handling in GET /api/skills/popular endpoint"""
 

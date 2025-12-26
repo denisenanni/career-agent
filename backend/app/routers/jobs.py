@@ -65,6 +65,7 @@ async def list_jobs(
     remote_type: Optional[RemoteType] = None,
     min_salary: Optional[int] = Query(None, ge=0),
     search: Optional[str] = Query(None, max_length=200),
+    skills: Optional[str] = Query(None, max_length=500, description="Comma-separated skills to filter by"),
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -77,6 +78,7 @@ async def list_jobs(
     - **remote_type**: Filter by remote type (full, hybrid, onsite)
     - **min_salary**: Minimum salary filter
     - **search**: Search in title, company, and description
+    - **skills**: Comma-separated list of skills to filter by (matches jobs with ANY of the skills)
     - **page**: Page number (starts at 1)
     - **per_page**: Number of results per page (max 100)
     """
@@ -97,6 +99,20 @@ async def list_jobs(
         query = query.filter(
             text("search_vector @@ plainto_tsquery('english', :search)")
         ).params(search=search)
+    if skills:
+        # Filter by skills (case-insensitive match in tags JSON array)
+        skill_list = [s.strip().lower() for s in skills.split(",") if s.strip()]
+        if skill_list:
+            # Use PostgreSQL JSON array containment with case-insensitive matching
+            # Check if any of the provided skills match any tag in the job
+            skill_conditions = " OR ".join([
+                f"EXISTS (SELECT 1 FROM json_array_elements_text(tags::json) AS tag WHERE lower(tag) = :skill_{i})"
+                for i in range(len(skill_list))
+            ])
+            params = {f"skill_{i}": skill for i, skill in enumerate(skill_list)}
+            query = query.filter(
+                text(f"tags IS NOT NULL AND ({skill_conditions})")
+            ).params(**params)
 
     # Calculate offset from page
     offset = (page - 1) * per_page

@@ -206,6 +206,58 @@ class TestListJobs:
             assert job["salary_min"] >= 100000
 
     @requires_postgresql
+    def test_filter_by_single_skill(self, client, sample_jobs):
+        """Test filtering jobs by single skill"""
+        response = client.get("/api/jobs?skills=python")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Only the Python Developer job has "python" tag
+        assert data["pagination"]["total"] >= 1
+        for job in data["jobs"]:
+            assert any("python" in tag.lower() for tag in job["tags"])
+
+    @requires_postgresql
+    def test_filter_by_multiple_skills(self, client, sample_jobs):
+        """Test filtering jobs by multiple skills (OR logic)"""
+        response = client.get("/api/jobs?skills=python,react")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should find jobs with either python OR react
+        assert data["pagination"]["total"] >= 2
+        for job in data["jobs"]:
+            job_tags_lower = [tag.lower() for tag in job["tags"]]
+            assert "python" in job_tags_lower or "react" in job_tags_lower
+
+    @requires_postgresql
+    def test_filter_by_skill_case_insensitive(self, client, sample_jobs):
+        """Test that skill filter is case insensitive"""
+        response_lower = client.get("/api/jobs?skills=python")
+        response_upper = client.get("/api/jobs?skills=PYTHON")
+
+        assert response_lower.status_code == 200
+        assert response_upper.status_code == 200
+
+        # Both should find the same jobs
+        assert response_lower.json()["pagination"]["total"] == response_upper.json()["pagination"]["total"]
+
+    @requires_postgresql
+    def test_filter_skills_with_search(self, client, sample_jobs):
+        """Test combining skills filter with search"""
+        response = client.get("/api/jobs?skills=python&search=Developer")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should find Python Developer job
+        assert data["pagination"]["total"] >= 1
+        for job in data["jobs"]:
+            assert any("python" in tag.lower() for tag in job["tags"])
+
+    @requires_postgresql
     def test_description_is_truncated(self, client, sample_jobs):
         """Test that long descriptions are truncated in list view"""
         # Create a job with very long description

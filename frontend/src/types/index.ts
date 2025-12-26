@@ -37,8 +37,18 @@ export interface JobFilters {
   remote_type?: string
   min_salary?: number
   search?: string
+  skills?: string  // comma-separated skills to filter by
   page?: number
   per_page?: number
+}
+
+export interface SkillWithCount {
+  skill: string
+  count: number
+}
+
+export interface SkillsFromJobsResponse {
+  skills: SkillWithCount[]
 }
 
 // Router location state for redirects after auth

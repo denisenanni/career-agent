@@ -8,10 +8,15 @@ import { JobsPage } from '../JobsPage'
 // Mock the API
 const mockFetchJobs = vi.fn()
 const mockRefreshJobs = vi.fn()
+const mockGetSkillsFromJobs = vi.fn()
 
 vi.mock('../../api/jobs', () => ({
   fetchJobs: (...args: unknown[]) => mockFetchJobs(...args),
   refreshJobs: () => mockRefreshJobs(),
+}))
+
+vi.mock('../../api/skills', () => ({
+  getSkillsFromJobs: () => mockGetSkillsFromJobs(),
 }))
 
 // Mock the useAuth hook
@@ -43,6 +48,13 @@ describe('JobsPage', () => {
       pagination: { total: 0, page: 1, per_page: 20, total_pages: 0, has_next: false, has_prev: false }
     })
     mockRefreshJobs.mockResolvedValue({ jobs_created: 10, jobs_updated: 5 })
+    mockGetSkillsFromJobs.mockResolvedValue({
+      skills: [
+        { skill: 'React', count: 150 },
+        { skill: 'TypeScript', count: 120 },
+        { skill: 'Python', count: 100 },
+      ]
+    })
   })
 
   it('shows Refresh Jobs button for admin users', () => {
@@ -243,7 +255,85 @@ describe('JobsPage', () => {
       })
 
       await waitFor(() => {
-        expect(screen.getByText(/no jobs match your search/i)).toBeInTheDocument()
+        expect(screen.getByText(/no jobs match your search or filters/i)).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('Skills Filter', () => {
+    it('renders skills filter dropdown', async () => {
+      mockUseAuth.mockReturnValue({
+        user: { id: 1, email: 'user@example.com', is_admin: false, skills: [], preferences: {} },
+        loading: false,
+      })
+
+      render(<JobsPage />, { wrapper: createWrapper() })
+
+      // Wait for loading to complete and filter to appear
+      await waitFor(() => {
+        expect(screen.queryByText(/filter by skills/i)).toBeInTheDocument()
+      }, { timeout: 3000 })
+    })
+
+    it('shows skills when dropdown is clicked', async () => {
+      mockUseAuth.mockReturnValue({
+        user: { id: 1, email: 'user@example.com', is_admin: false, skills: [], preferences: {} },
+        loading: false,
+      })
+
+      render(<JobsPage />, { wrapper: createWrapper() })
+
+      // Wait for loading to complete
+      await waitFor(() => {
+        expect(screen.queryByText(/filter by skills/i)).toBeInTheDocument()
+      }, { timeout: 3000 })
+
+      const dropdownButton = screen.getByText(/filter by skills/i)
+
+      await act(async () => {
+        fireEvent.click(dropdownButton)
+      })
+
+      await waitFor(() => {
+        expect(screen.getByText('React')).toBeInTheDocument()
+        expect(screen.getByText('TypeScript')).toBeInTheDocument()
+        expect(screen.getByText('Python')).toBeInTheDocument()
+      })
+    })
+
+    it('filters jobs when skill is selected', async () => {
+      mockUseAuth.mockReturnValue({
+        user: { id: 1, email: 'user@example.com', is_admin: false, skills: [], preferences: {} },
+        loading: false,
+      })
+
+      render(<JobsPage />, { wrapper: createWrapper() })
+
+      // Wait for loading to complete
+      await waitFor(() => {
+        expect(screen.queryByText(/filter by skills/i)).toBeInTheDocument()
+      }, { timeout: 3000 })
+
+      const dropdownButton = screen.getByText(/filter by skills/i)
+
+      await act(async () => {
+        fireEvent.click(dropdownButton)
+      })
+
+      await waitFor(() => {
+        expect(screen.getByText('React')).toBeInTheDocument()
+      })
+
+      const reactCheckbox = screen.getByRole('checkbox', { name: /react/i })
+
+      await act(async () => {
+        fireEvent.click(reactCheckbox)
+      })
+
+      await waitFor(() => {
+        expect(mockFetchJobs).toHaveBeenCalledWith(
+          expect.objectContaining({ skills: 'React' })
+        )
       })
     })
   })
