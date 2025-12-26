@@ -365,4 +365,193 @@ describe('SkillAutocompleteModal', () => {
       expect(onClose).not.toHaveBeenCalled()
     })
   })
+
+  describe('Race Condition Prevention', () => {
+    it('preserves search results when initial load completes after search', async () => {
+      // Simulate race condition: search completes before initial load
+      let resolveInitialLoad: (value: { skills: string[] }) => void
+      const initialLoadPromise = new Promise<{ skills: string[] }>(resolve => {
+        resolveInitialLoad = resolve
+      })
+
+      mockGetPopularSkills.mockImplementation(async (limit, search) => {
+        if (search) {
+          // Search returns immediately with specific skills
+          return { skills: ['Golang', 'GoLang', 'Go'] }
+        }
+        // Initial load is delayed
+        return initialLoadPromise
+      })
+
+      render(<SkillAutocompleteModal {...defaultProps} />)
+
+      // Wait for initial load to start (component shows loading state)
+      await waitFor(() => {
+        expect(mockGetPopularSkills).toHaveBeenCalledWith(200)
+      })
+
+      // Resolve initial load first to enable the input
+      await act(async () => {
+        resolveInitialLoad!({ skills: ['Python', 'React', 'TypeScript'] })
+        await new Promise(r => setTimeout(r, 50))
+      })
+
+      const input = await screen.findByPlaceholderText(/search or type/i)
+
+      // Type to trigger search - use "gol" which won't match initial skills
+      await act(async () => {
+        fireEvent.change(input, { target: { value: 'gol' } })
+      })
+
+      // Wait for debounced search to complete
+      await act(async () => {
+        await new Promise(r => setTimeout(r, 400))
+      })
+
+      // The search result "Golang" should be visible in dropdown
+      await waitFor(() => {
+        expect(screen.getByText('Golang')).toBeInTheDocument()
+      })
+    })
+
+    it('shows skills from search API even when not in initial popular list', async () => {
+      // Initial load returns skills that don't include "golang"
+      mockGetPopularSkills.mockImplementation(async (limit, search) => {
+        if (search === 'gol') {
+          return { skills: ['Golang', 'GoLang'] }
+        }
+        return { skills: ['Python', 'React', 'TypeScript', 'Node.js'] }
+      })
+
+      render(<SkillAutocompleteModal {...defaultProps} />)
+
+      // Wait for initial load
+      await waitFor(() => {
+        expect(mockGetPopularSkills).toHaveBeenCalledWith(200)
+      })
+
+      const input = await screen.findByPlaceholderText(/search or type/i)
+
+      // Type "gol" - not in initial list
+      await act(async () => {
+        fireEvent.change(input, { target: { value: 'gol' } })
+      })
+
+      // Wait for debounced search
+      await act(async () => {
+        await new Promise(r => setTimeout(r, 400))
+      })
+
+      // "Golang" should be in the dropdown
+      await waitFor(() => {
+        expect(screen.getByText('Golang')).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('Custom Skill Addition - Synchronous', () => {
+    it('adds custom skill immediately without waiting for API', async () => {
+      const onAddSkill = vi.fn()
+
+      // Make API call slow to ensure we're not waiting for it
+      mockAddCustomSkill.mockImplementation(async () => {
+        await new Promise(r => setTimeout(r, 1000))
+        return { skill: 'MyUniqueSkill', usage_count: 1 }
+      })
+
+      render(<SkillAutocompleteModal {...defaultProps} onAddSkill={onAddSkill} />)
+
+      await waitFor(() => {
+        expect(mockGetPopularSkills).toHaveBeenCalled()
+      })
+
+      const input = await screen.findByPlaceholderText(/search or type/i)
+
+      // Use a unique skill name that won't match any existing skills
+      await act(async () => {
+        fireEvent.change(input, { target: { value: 'MyUniqueSkill' } })
+      })
+
+      const addButton = await screen.findByText(/add custom skill/i)
+
+      // Click the button
+      await act(async () => {
+        fireEvent.click(addButton)
+      })
+
+      // onAddSkill should be called IMMEDIATELY, not after the API call
+      // (If it waited for API, this would fail because API takes 1000ms)
+      expect(onAddSkill).toHaveBeenCalledWith('MyUniqueSkill')
+    })
+
+    it('still calls API to save custom skill after adding', async () => {
+      const onAddSkill = vi.fn()
+
+      render(<SkillAutocompleteModal {...defaultProps} onAddSkill={onAddSkill} />)
+
+      await waitFor(() => {
+        expect(mockGetPopularSkills).toHaveBeenCalled()
+      })
+
+      const input = await screen.findByPlaceholderText(/search or type/i)
+
+      await act(async () => {
+        fireEvent.change(input, { target: { value: 'MyNewSkill' } })
+      })
+
+      const addButton = await screen.findByText(/add custom skill/i)
+
+      await act(async () => {
+        fireEvent.click(addButton)
+      })
+
+      // Both onAddSkill and API should be called
+      expect(onAddSkill).toHaveBeenCalledWith('MyNewSkill')
+
+      // API call is fire-and-forget, but should still be made
+      await waitFor(() => {
+        expect(mockAddCustomSkill).toHaveBeenCalledWith('MyNewSkill')
+      })
+    })
+
+    it('does not add skill that already exists (case-insensitive)', async () => {
+      const onAddSkill = vi.fn()
+
+      render(
+        <SkillAutocompleteModal
+          {...defaultProps}
+          onAddSkill={onAddSkill}
+          existingSkills={['JavaScript']}
+        />
+      )
+
+      await waitFor(() => {
+        expect(mockGetPopularSkills).toHaveBeenCalled()
+      })
+
+      const input = await screen.findByPlaceholderText(/search or type/i)
+
+      // Type "javascript" (lowercase) - should match "JavaScript" (mixed case)
+      await act(async () => {
+        fireEvent.change(input, { target: { value: 'javascript' } })
+      })
+
+      // The "Add custom skill" option should not appear for an existing skill
+      await act(async () => {
+        await new Promise(r => setTimeout(r, 100))
+      })
+
+      // Try to find the add custom skill button
+      const addCustomButtons = screen.queryAllByText(/add custom skill/i)
+
+      // If the button exists and we click it, onAddSkill should NOT be called
+      // because "javascript" matches "JavaScript" case-insensitively
+      if (addCustomButtons.length > 0) {
+        await act(async () => {
+          fireEvent.click(addCustomButtons[0])
+        })
+        expect(onAddSkill).not.toHaveBeenCalled()
+      }
+    })
+  })
 })

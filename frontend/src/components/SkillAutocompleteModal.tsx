@@ -43,7 +43,17 @@ export function SkillAutocompleteModal({
     try {
       const response = await getPopularSkills(200)
       if (response.skills.length > 0) {
-        setAllSkills(response.skills.sort())
+        // Use merge pattern to avoid overwriting any skills added by search
+        setAllSkills(prev => {
+          const combined = [...response.skills]
+          // Add any skills from prev that aren't in the response (e.g., from search)
+          for (const skill of prev) {
+            if (!combined.some(s => s.toLowerCase() === skill.toLowerCase())) {
+              combined.push(skill)
+            }
+          }
+          return combined.sort()
+        })
       }
     } catch (error) {
       console.error('Failed to load popular skills, using fallback list:', error)
@@ -161,24 +171,23 @@ export function SkillAutocompleteModal({
     inputRef.current?.focus()
   }
 
-  const handleAddCustomSkill = async () => {
+  const handleAddCustomSkill = () => {
     const trimmed = searchTerm.trim()
     if (trimmed && !existingSkills.some(s => s.toLowerCase() === trimmed.toLowerCase())) {
-      // Save custom skill to database so it appears for other users
-      try {
-        const result = await addCustomSkill(trimmed)
-        console.log('Custom skill saved:', result)
+      // Add skill to user profile immediately (don't wait for API)
+      onAddSkill(trimmed)
 
-        // Add to local skills list immediately so it appears for this user
-        if (!allSkills.includes(trimmed)) {
-          setAllSkills(prev => [...prev, trimmed].sort())
-        }
-      } catch (error) {
-        console.error('Failed to save custom skill to database:', error)
-        // Continue anyway - user can still add to their profile
+      // Add to local skills list immediately so it appears for this user
+      if (!allSkills.some(s => s.toLowerCase() === trimmed.toLowerCase())) {
+        setAllSkills(prev => [...prev, trimmed].sort())
       }
 
-      onAddSkill(trimmed)
+      // Save custom skill to database asynchronously (fire-and-forget)
+      // This makes it available for other users to discover
+      addCustomSkill(trimmed)
+        .then(result => console.log('Custom skill saved:', result))
+        .catch(error => console.error('Failed to save custom skill to database:', error))
+
       setSearchTerm('')
       setFilteredSkills([])
       inputRef.current?.focus()
