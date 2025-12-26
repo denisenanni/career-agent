@@ -447,3 +447,80 @@ def reset_cache_metrics() -> bool:
     except RedisError as e:
         logger.error(f"Failed to reset metrics: {e}")
         return False
+
+
+# =============================================================================
+# Job Status Tracking (for async background tasks)
+# =============================================================================
+
+JOB_STATUS_PREFIX = "job_status"
+TTL_JOB_STATUS = 60 * 60  # 1 hour - status expires after completion
+
+
+def build_job_status_key(job_type: str, user_id: int) -> str:
+    """Build cache key for job status tracking"""
+    return f"{JOB_STATUS_PREFIX}:{job_type}:{user_id}"
+
+
+def set_job_status(
+    job_type: str,
+    user_id: int,
+    status: str,
+    message: str = "",
+    result: Optional[dict] = None,
+) -> bool:
+    """
+    Set status for a background job.
+
+    Args:
+        job_type: Type of job (e.g., "match_refresh")
+        user_id: User ID this job belongs to
+        status: Status string (pending, processing, completed, failed)
+        message: Human-readable status message
+        result: Optional result data (for completed jobs)
+
+    Returns:
+        True if successful, False otherwise
+    """
+    from datetime import datetime, timezone
+
+    key = build_job_status_key(job_type, user_id)
+    data = {
+        "status": status,
+        "message": message,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if result is not None:
+        data["result"] = result
+
+    return cache_set(key, data, ttl_seconds=TTL_JOB_STATUS, track_metrics=False)
+
+
+def get_job_status(job_type: str, user_id: int) -> Optional[dict]:
+    """
+    Get status for a background job.
+
+    Args:
+        job_type: Type of job (e.g., "match_refresh")
+        user_id: User ID this job belongs to
+
+    Returns:
+        Status dict or None if no job found
+    """
+    key = build_job_status_key(job_type, user_id)
+    return cache_get(key, track_metrics=False)
+
+
+def clear_job_status(job_type: str, user_id: int) -> bool:
+    """
+    Clear job status (e.g., when starting a new job).
+
+    Args:
+        job_type: Type of job
+        user_id: User ID
+
+    Returns:
+        True if successful
+    """
+    key = build_job_status_key(job_type, user_id)
+    return cache_delete(key)

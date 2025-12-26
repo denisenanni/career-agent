@@ -1,11 +1,12 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
 import { MatchCard } from '../components/MatchCard'
 import { SkeletonList } from '../components/SkeletonCard'
-import { fetchMatches, refreshMatches } from '../api/matches'
+import { fetchMatches, refreshMatches, getRefreshStatus } from '../api/matches'
 import { getProfile } from '../api/profile'
 import { useAuth } from '../contexts/AuthContext'
-import type { MatchFilters } from '../types'
+import type { MatchFilters, RefreshStatusResponse } from '../types'
 
 export function MatchesPage() {
   const { user } = useAuth()
@@ -14,6 +15,8 @@ export function MatchesPage() {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [limit] = useState(50)
   const [offset, setOffset] = useState(0)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Memoize filters with exclusive score ranges
   const filters = useMemo<MatchFilters>(() => {
@@ -69,11 +72,70 @@ export function MatchesPage() {
 
   const hasCVUploaded = profile?.cv_uploaded_at !== null
 
+  // Stop polling helper
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current)
+      pollingRef.current = null
+    }
+  }, [])
+
+  // Handle status check
+  const checkStatus = useCallback(async () => {
+    try {
+      const status: RefreshStatusResponse = await getRefreshStatus()
+
+      if (status.status === 'completed') {
+        stopPolling()
+        setIsRefreshing(false)
+        toast.dismiss('refresh-matches')
+        queryClient.invalidateQueries({ queryKey: ['matches'] })
+
+        const matchCount = status.result?.matches_created ?? 0
+        const updatedCount = status.result?.matches_updated ?? 0
+        toast.success(`Found ${matchCount + updatedCount} matches! (${matchCount} new)`)
+      } else if (status.status === 'failed') {
+        stopPolling()
+        setIsRefreshing(false)
+        toast.dismiss('refresh-matches')
+        toast.error(status.message || 'Match refresh failed')
+      }
+      // Keep polling if still pending/processing
+    } catch {
+      stopPolling()
+      setIsRefreshing(false)
+      toast.dismiss('refresh-matches')
+      toast.error('Failed to check refresh status')
+    }
+  }, [queryClient, stopPolling])
+
+  // Start polling when refresh begins
+  const startPolling = useCallback(() => {
+    stopPolling() // Clear any existing polling
+    pollingRef.current = setInterval(checkStatus, 2500) // Poll every 2.5 seconds
+  }, [checkStatus, stopPolling])
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => stopPolling()
+  }, [stopPolling])
+
   // Mutation for refreshing matches
   const refreshMutation = useMutation({
     mutationFn: refreshMatches,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['matches'] })
+    onSuccess: (data) => {
+      if (data.status === 'processing') {
+        setIsRefreshing(true)
+        startPolling()
+        toast.loading('Refreshing matches...', { id: 'refresh-matches' })
+      } else if (data.status === 'already_processing') {
+        setIsRefreshing(true)
+        startPolling()
+        toast('Refresh already in progress', { icon: '⏳' })
+      }
+    },
+    onError: () => {
+      toast.error('Failed to start match refresh')
     },
   })
 
@@ -90,23 +152,13 @@ export function MatchesPage() {
         {user?.is_admin && (
           <button
             onClick={() => refreshMutation.mutate()}
-            disabled={refreshMutation.isPending}
+            disabled={isRefreshing || refreshMutation.isPending}
             className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 disabled:bg-gray-400"
           >
-            {refreshMutation.isPending ? 'Refreshing...' : 'Refresh Matches'}
+            {isRefreshing ? 'Refreshing...' : 'Refresh Matches'}
           </button>
         )}
       </div>
-
-      {/* Success Message */}
-      {refreshMutation.isSuccess && (
-        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-md">
-          <p className="font-medium">Matches refreshed!</p>
-          <p className="text-sm">
-            Created: {refreshMutation.data.matches_created}, Updated: {refreshMutation.data.matches_updated}
-          </p>
-        </div>
-      )}
 
       {/* CV Required Warning */}
       {!hasCVUploaded && (
@@ -220,10 +272,10 @@ export function MatchesPage() {
           {user?.is_admin && (
             <button
               onClick={() => refreshMutation.mutate()}
-              disabled={refreshMutation.isPending}
+              disabled={isRefreshing || refreshMutation.isPending}
               className="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700 disabled:bg-gray-400"
             >
-              {refreshMutation.isPending ? 'Refreshing...' : 'Refresh Matches'}
+              {isRefreshing ? 'Refreshing...' : 'Refresh Matches'}
             </button>
           )}
         </div>

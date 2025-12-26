@@ -374,13 +374,38 @@ User + Job
 
 ---
 
+## Triggering Match Calculation
+
+Matches are calculated in different scenarios:
+
+| Trigger | Execution | Notes |
+|---------|-----------|-------|
+| **CV Upload** | Background task | Matches user against all jobs after CV parsing |
+| **Job Scraped** | Synchronous | Matches new job against all users with CVs |
+| **Manual Refresh** | **Background task (async)** | User clicks "Refresh Matches" button |
+
+### Async Match Refresh
+
+The `POST /api/matches/refresh` endpoint is **non-blocking**:
+
+1. Returns immediately with `{"status": "processing"}`
+2. Matching runs in background via FastAPI `BackgroundTasks`
+3. Status tracked in Redis (`job_status:match_refresh:{user_id}`)
+4. Frontend polls `GET /api/matches/refresh/status` every 2.5 seconds
+5. Shows toast notification on completion
+
+See [api.md](./api.md#refresh-matches-async) for full endpoint documentation.
+
+---
+
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `backend/app/services/matching.py` | Core matching logic |
 | `backend/app/services/llm.py` | LLM extraction functions |
+| `backend/app/services/redis_cache.py` | Redis caching + job status tracking |
 | `backend/app/utils/skill_aliases.py` | Skill normalization & aliases |
-| `backend/app/utils/skill_clusters.py` | Semantic skill clustering (NEW) |
+| `backend/app/utils/skill_clusters.py` | Semantic skill clustering |
 | `backend/app/models/match.py` | Match database model |
-| `backend/app/routers/matches.py` | API endpoints |
+| `backend/app/routers/matches.py` | API endpoints (including async refresh) |

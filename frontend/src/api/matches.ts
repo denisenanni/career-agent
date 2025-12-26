@@ -1,7 +1,8 @@
 import type {
   MatchesResponse,
   MatchFilters,
-  RefreshMatchesResponse,
+  RefreshMatchesAsyncResponse,
+  RefreshStatusResponse,
   CoverLetterResponse,
   CVHighlightsResponse,
   RegenerateResponse
@@ -13,9 +14,15 @@ export async function fetchMatches(filters: MatchFilters = {}): Promise<MatchesR
   return apiFetch<MatchesResponse>(`/api/matches${queryString}`, { requiresAuth: true })
 }
 
-export async function refreshMatches(): Promise<RefreshMatchesResponse> {
-  return apiFetch<RefreshMatchesResponse>('/api/matches/refresh', {
+export async function refreshMatches(): Promise<RefreshMatchesAsyncResponse> {
+  return apiFetch<RefreshMatchesAsyncResponse>('/api/matches/refresh', {
     method: 'POST',
+    requiresAuth: true,
+  })
+}
+
+export async function getRefreshStatus(): Promise<RefreshStatusResponse> {
+  return apiFetch<RefreshStatusResponse>('/api/matches/refresh/status', {
     requiresAuth: true,
   })
 }

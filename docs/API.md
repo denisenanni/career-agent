@@ -780,6 +780,102 @@ GET /api/matches?min_score=70&status=matched&limit=10
 
 ---
 
+### Refresh Matches (Async)
+
+Trigger background match calculation against all jobs.
+
+**Endpoint:** `POST /api/matches/refresh`
+**Authentication:** Required (Admin only)
+**Rate Limit:** 5 requests per hour
+
+**Response:** `200 OK`
+```json
+{
+  "status": "processing",
+  "message": "Match refresh started. Poll /api/matches/refresh/status for updates."
+}
+```
+
+**Alternative Response (if already running):**
+```json
+{
+  "status": "already_processing",
+  "message": "Match refresh is already in progress. Check status endpoint for updates."
+}
+```
+
+**Notes:**
+- This is an **asynchronous** operation - returns immediately
+- Processing happens in background using FastAPI BackgroundTasks
+- Poll `/api/matches/refresh/status` to check completion
+- Status tracked in Redis with 1-hour TTL
+
+---
+
+### Get Refresh Status
+
+Poll for match refresh completion status.
+
+**Endpoint:** `GET /api/matches/refresh/status`
+**Authentication:** Required
+
+**Response:** `200 OK`
+
+**When no refresh has been started:**
+```json
+{
+  "status": "none",
+  "message": "No match refresh in progress or recently completed."
+}
+```
+
+**When processing:**
+```json
+{
+  "status": "processing",
+  "message": "Calculating matches against all jobs...",
+  "updated_at": "2024-12-18T12:00:00Z"
+}
+```
+
+**When completed:**
+```json
+{
+  "status": "completed",
+  "message": "Found 25 matches (10 new)",
+  "result": {
+    "matches_created": 10,
+    "matches_updated": 15,
+    "total_jobs_processed": 500
+  },
+  "updated_at": "2024-12-18T12:05:00Z"
+}
+```
+
+**When failed:**
+```json
+{
+  "status": "failed",
+  "message": "Match refresh failed: Database connection error",
+  "updated_at": "2024-12-18T12:01:00Z"
+}
+```
+
+**Status Values:**
+- `none` - No refresh started or status expired (1-hour TTL)
+- `pending` - Refresh queued
+- `processing` - Refresh in progress
+- `completed` - Refresh finished successfully
+- `failed` - Refresh failed with error
+
+**Frontend Integration:**
+1. Call `POST /api/matches/refresh` to start
+2. Poll `GET /api/matches/refresh/status` every 2-3 seconds
+3. When `status === "completed"`, show toast and refresh matches list
+4. When `status === "failed"`, show error message
+
+---
+
 ### Update Match Status
 
 Update application status for a match.
@@ -1377,6 +1473,7 @@ All error responses follow this format:
 | `POST /auth/register` | 5 requests/hour per IP |
 | `POST /auth/login` | 10 requests/minute per IP |
 | `POST /api/profile/cv` | 10 requests/hour per IP |
+| `POST /api/matches/refresh` | 5 requests/hour per IP |
 | `POST /api/user-jobs/parse` | 10 requests/hour per IP |
 
 ---

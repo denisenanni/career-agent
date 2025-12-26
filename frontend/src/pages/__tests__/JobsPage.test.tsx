@@ -38,7 +38,10 @@ const createWrapper = () => {
 describe('JobsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockFetchJobs.mockResolvedValue({ jobs: [], total: 0, limit: 50, offset: 0 })
+    mockFetchJobs.mockResolvedValue({
+      jobs: [],
+      pagination: { total: 0, page: 1, per_page: 20, total_pages: 0, has_next: false, has_prev: false }
+    })
     mockRefreshJobs.mockResolvedValue({ jobs_created: 10, jobs_updated: 5 })
   })
 
@@ -264,9 +267,7 @@ describe('JobsPage', () => {
             scraped_at: '2024-01-01T10:00:00Z',
           },
         ],
-        total: 1,
-        limit: 50,
-        offset: 0,
+        pagination: { total: 1, page: 1, per_page: 20, total_pages: 1, has_next: false, has_prev: false },
       })
 
       render(<JobsPage />, { wrapper: createWrapper() })
@@ -286,9 +287,7 @@ describe('JobsPage', () => {
           { id: 1, title: 'Job 1', company: 'Co 1', location: 'Remote', url: '#', description: 'Desc 1', skills: [], scraped_at: '2024-01-01' },
           { id: 2, title: 'Job 2', company: 'Co 2', location: 'Remote', url: '#', description: 'Desc 2', skills: [], scraped_at: '2024-01-01' },
         ],
-        total: 25,
-        limit: 50,
-        offset: 0,
+        pagination: { total: 25, page: 1, per_page: 20, total_pages: 2, has_next: true, has_prev: false },
       })
 
       render(<JobsPage />, { wrapper: createWrapper() })

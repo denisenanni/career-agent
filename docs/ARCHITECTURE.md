@@ -179,6 +179,7 @@ See **[SCHEMA.md](./SCHEMA.md)** for complete database schema documentation.
 | Job Extraction | `job_extract:{job_id}` | Haiku | 7d | $0.005 → $0.00 per cache hit |
 | Cover Letter | `cover_letter:{user_id}:{job_id}` | Sonnet | 30d | $0.15 → $0.00 per cache hit |
 | CV Highlights | `cv_highlights:{user_id}:{job_id}` | Haiku | 30d | $0.01 → $0.00 per cache hit |
+| Job Status | `job_status:{type}:{user_id}` | N/A | 1h | Background task tracking |
 
 **Expected Impact:**
 - 90%+ cache hit rate for repeated operations
@@ -190,6 +191,7 @@ See **[SCHEMA.md](./SCHEMA.md)** for complete database schema documentation.
 - JSON serialization for complex objects
 - Graceful fallback if Redis unavailable
 - TTL-based automatic expiration
+- Job status tracking for async operations
 
 ---
 
@@ -461,6 +463,47 @@ yarn dev
    - Update scrape log (status: `completed`, jobs_found, jobs_new)
 4. Frontend refreshes job list
 
+### Match Refresh Flow (Async)
+
+1. User clicks "Refresh Matches" button
+2. Frontend calls `POST /api/matches/refresh`
+3. Backend:
+   - Checks if refresh already in progress (Redis status)
+   - If already processing: returns `already_processing`
+   - Sets Redis status to `pending`
+   - Queues background task via FastAPI `BackgroundTasks`
+   - Returns immediately with `processing` status
+4. Background task runs:
+   - Updates Redis status to `processing`
+   - Matches user against all jobs in database
+   - On completion: Updates Redis with `completed` status + results
+   - On error: Updates Redis with `failed` status + error message
+5. Frontend polls `GET /api/matches/refresh/status` every 2.5 seconds
+6. When status is `completed`:
+   - Frontend shows success toast
+   - Invalidates React Query cache
+   - Matches list auto-refreshes
+
+```
+Frontend                           Backend                          Redis
+   │                                  │                               │
+   ├─POST /refresh──────────────────►│                               │
+   │                                  ├─SET status=pending──────────►│
+   │                                  ├─Queue BackgroundTask         │
+   │◄─────{status: "processing"}──────┤                               │
+   │                                  │                               │
+   │                                  │ (Background)                  │
+   │                                  ├─SET status=processing───────►│
+   │                                  │ ... matching ...              │
+   │                                  ├─SET status=completed─────────►│
+   │                                  │                               │
+   ├─GET /refresh/status─────────────►│                               │
+   │                                  ├─GET status──────────────────►│
+   │◄─────{status: "completed"}───────┤◄──────────────────────────────┤
+   │                                  │                               │
+   └─Invalidate cache, show toast     │                               │
+```
+
 ---
 
 ## Performance Optimizations
@@ -542,8 +585,10 @@ yarn dev
    - Partitioning for large job tables (by scraped_at)
    - Materialized views for skill analysis
 
-4. **Asynchronous Processing:**
-   - Background job queue (Celery + Redis)
+4. **Asynchronous Processing (Partially Implemented):**
+   - FastAPI BackgroundTasks for non-blocking operations
+   - Redis-based job status tracking for polling
+   - Future: Celery + Redis for persistent job queue
    - Async scraping workers
    - Batch match generation
 

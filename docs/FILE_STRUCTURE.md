@@ -56,7 +56,7 @@ frontend/
 │   ├── api/                     # API client functions
 │   │   ├── auth.ts             # Auth endpoints (login, register, logout)
 │   │   ├── jobs.ts             # Jobs endpoints (list, search, refresh)
-│   │   ├── matches.ts          # Matches endpoints (list, generate, update status)
+│   │   ├── matches.ts          # Matches endpoints (list, generate, update status, refresh status polling)
 │   │   ├── profile.ts          # Profile endpoints (get, update, CV upload)
 │   │   ├── insights.ts         # Insights endpoints (skill analysis)
 │   │   └── skills.ts           # Skills endpoints (popular, custom)

@@ -11,8 +11,9 @@ from app.services.redis_cache import (
     cache_delete_pattern, get_redis_client,
     build_cv_parse_key, build_job_extract_key,
     build_cover_letter_key, build_cv_highlights_key,
-    build_match_content_pattern,
-    TTL_30_DAYS, TTL_7_DAYS, TTL_1_HOUR
+    build_match_content_pattern, build_job_status_key,
+    set_job_status, get_job_status, clear_job_status,
+    TTL_30_DAYS, TTL_7_DAYS, TTL_1_HOUR, TTL_JOB_STATUS
 )
 
 
@@ -778,3 +779,197 @@ class TestCacheMetrics:
         with patch('app.services.redis_cache.get_redis_client', return_value=mock_client):
             # Should not raise, just log
             _increment_metric("test_key", "test_category")
+
+
+class TestJobStatusTracking:
+    """Test job status tracking functions for async operations"""
+
+    def test_build_job_status_key(self):
+        """Test building job status key"""
+        from app.services.redis_cache import build_job_status_key
+
+        key = build_job_status_key("match_refresh", 123)
+        assert key == "job_status:match_refresh:123"
+
+    def test_set_job_status_success(self, reset_redis_client):
+        """Test setting job status successfully"""
+        from app.services.redis_cache import set_job_status
+
+        mock_client = MagicMock()
+        mock_client.setex.return_value = True
+        redis_cache_module._redis_client = mock_client
+
+        result = set_job_status(
+            job_type="match_refresh",
+            user_id=1,
+            status="processing",
+            message="Matching in progress..."
+        )
+
+        assert result is True
+        mock_client.setex.assert_called_once()
+        call_args = mock_client.setex.call_args
+        assert call_args[0][0] == "job_status:match_refresh:1"
+
+    def test_set_job_status_with_result(self, reset_redis_client):
+        """Test setting job status with result data"""
+        from app.services.redis_cache import set_job_status
+        import json
+
+        mock_client = MagicMock()
+        mock_client.setex.return_value = True
+        redis_cache_module._redis_client = mock_client
+
+        result = set_job_status(
+            job_type="match_refresh",
+            user_id=1,
+            status="completed",
+            message="Found 25 matches",
+            result={"matches_created": 10, "matches_updated": 15}
+        )
+
+        assert result is True
+        # Verify the result was included in the JSON
+        call_args = mock_client.setex.call_args
+        stored_data = json.loads(call_args[0][2])
+        assert stored_data["status"] == "completed"
+        assert stored_data["result"]["matches_created"] == 10
+
+    def test_set_job_status_redis_unavailable(self, reset_redis_client):
+        """Test set_job_status when Redis is unavailable"""
+        from app.services.redis_cache import set_job_status
+
+        with patch('app.services.redis_cache.get_redis_client', return_value=None):
+            result = set_job_status("match_refresh", 1, "processing", "test")
+
+        assert result is False
+
+    def test_get_job_status_success(self, reset_redis_client):
+        """Test getting job status successfully"""
+        from app.services.redis_cache import get_job_status
+        import json
+
+        mock_client = MagicMock()
+        mock_client.get.return_value = json.dumps({
+            "status": "completed",
+            "message": "Done!",
+            "updated_at": "2024-12-26T10:00:00Z",
+            "result": {"matches_created": 5}
+        })
+        redis_cache_module._redis_client = mock_client
+
+        result = get_job_status("match_refresh", 1)
+
+        assert result is not None
+        assert result["status"] == "completed"
+        assert result["result"]["matches_created"] == 5
+        mock_client.get.assert_called_once_with("job_status:match_refresh:1")
+
+    def test_get_job_status_not_found(self, reset_redis_client):
+        """Test getting job status when not found"""
+        from app.services.redis_cache import get_job_status
+
+        mock_client = MagicMock()
+        mock_client.get.return_value = None
+        redis_cache_module._redis_client = mock_client
+
+        result = get_job_status("match_refresh", 1)
+
+        assert result is None
+
+    def test_get_job_status_redis_unavailable(self, reset_redis_client):
+        """Test get_job_status when Redis is unavailable"""
+        from app.services.redis_cache import get_job_status
+
+        with patch('app.services.redis_cache.get_redis_client', return_value=None):
+            result = get_job_status("match_refresh", 1)
+
+        assert result is None
+
+    def test_get_job_status_redis_error(self, reset_redis_client):
+        """Test get_job_status handles Redis errors"""
+        from app.services.redis_cache import get_job_status
+
+        mock_client = MagicMock()
+        mock_client.get.side_effect = RedisError("Get failed")
+        redis_cache_module._redis_client = mock_client
+
+        result = get_job_status("match_refresh", 1)
+
+        assert result is None
+
+    def test_clear_job_status_success(self, reset_redis_client):
+        """Test clearing job status successfully"""
+        from app.services.redis_cache import clear_job_status
+
+        mock_client = MagicMock()
+        mock_client.delete.return_value = 1
+        redis_cache_module._redis_client = mock_client
+
+        result = clear_job_status("match_refresh", 1)
+
+        assert result is True
+        mock_client.delete.assert_called_once_with("job_status:match_refresh:1")
+
+    def test_clear_job_status_not_found(self, reset_redis_client):
+        """Test clearing job status when key doesn't exist"""
+        from app.services.redis_cache import clear_job_status
+
+        mock_client = MagicMock()
+        mock_client.delete.return_value = 0
+        redis_cache_module._redis_client = mock_client
+
+        result = clear_job_status("match_refresh", 1)
+
+        # Still returns True (operation succeeded even if key didn't exist)
+        assert result is True
+
+    def test_job_status_ttl_is_one_hour(self):
+        """Test that job status TTL is set to 1 hour"""
+        from app.services.redis_cache import TTL_JOB_STATUS
+
+        assert TTL_JOB_STATUS == 60 * 60  # 1 hour in seconds
+
+
+@requires_redis
+class TestJobStatusTrackingIntegration:
+    """Integration tests for job status tracking with real Redis"""
+
+    def test_set_get_clear_job_status_flow(self):
+        """Test complete job status lifecycle"""
+        from app.services.redis_cache import (
+            set_job_status, get_job_status, clear_job_status
+        )
+
+        job_type = "test_job"
+        user_id = 99999  # Use unlikely user ID for testing
+
+        try:
+            # Set status
+            success = set_job_status(
+                job_type, user_id, "processing", "Starting..."
+            )
+            assert success is True
+
+            # Get status
+            status = get_job_status(job_type, user_id)
+            assert status is not None
+            assert status["status"] == "processing"
+            assert status["message"] == "Starting..."
+            assert "updated_at" in status
+
+            # Update status
+            success = set_job_status(
+                job_type, user_id, "completed", "Done!",
+                result={"count": 42}
+            )
+            assert success is True
+
+            # Verify update
+            status = get_job_status(job_type, user_id)
+            assert status["status"] == "completed"
+            assert status["result"]["count"] == 42
+
+        finally:
+            # Cleanup
+            clear_job_status(job_type, user_id)

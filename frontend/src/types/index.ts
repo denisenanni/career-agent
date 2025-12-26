@@ -182,6 +182,19 @@ export interface RefreshMatchesResponse {
   total_jobs_processed: number
 }
 
+// Async refresh response (new async endpoint)
+export interface RefreshMatchesAsyncResponse {
+  status: 'processing' | 'already_processing'
+  message: string
+}
+
+export interface RefreshStatusResponse {
+  status: 'none' | 'pending' | 'processing' | 'completed' | 'failed'
+  message: string
+  result?: RefreshMatchesResponse
+  updated_at?: string
+}
+
 // Insights types
 export interface SkillRecommendation {
   skill: string

@@ -1,7 +1,7 @@
 """
 Matches router - job matching and application generation
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from typing import Optional, List
@@ -10,12 +10,17 @@ import logging
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from app.database import get_db
+from app.database import get_db, get_db_session
 from app.models import User, Match, Job
 from app.dependencies.auth import get_current_user
 from app.services.matching import match_user_with_all_jobs
 from app.services.generation import generate_cover_letter, generate_cv_highlights
-from app.services.redis_cache import cache_delete_pattern, build_match_content_pattern
+from app.services.redis_cache import (
+    cache_delete_pattern,
+    build_match_content_pattern,
+    set_job_status,
+    get_job_status,
+)
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -79,6 +84,85 @@ class CVHighlightsResponse(BaseModel):
 class RegenerateResponse(BaseModel):
     message: str
     keys_invalidated: int
+
+
+class RefreshStatusResponse(BaseModel):
+    status: str  # pending, processing, completed, failed, none
+    message: str
+    result: Optional[dict] = None
+    updated_at: Optional[str] = None
+
+
+# Background task for match refresh
+JOB_TYPE_MATCH_REFRESH = "match_refresh"
+
+
+async def run_match_refresh(user_id: int) -> None:
+    """
+    Background task to refresh matches for a user against all jobs.
+
+    Updates Redis status so frontend can poll for completion.
+    """
+    logger.info(f"Starting background match refresh for user {user_id}")
+
+    try:
+        set_job_status(
+            JOB_TYPE_MATCH_REFRESH,
+            user_id,
+            status="processing",
+            message="Calculating matches against all jobs...",
+        )
+
+        with get_db_session() as db:
+            user = db.query(User).filter(User.id == user_id).first()
+
+            if not user:
+                logger.warning(f"User {user_id} not found for match refresh")
+                set_job_status(
+                    JOB_TYPE_MATCH_REFRESH,
+                    user_id,
+                    status="failed",
+                    message="User not found",
+                )
+                return
+
+            # Get count before
+            matches_before = db.query(Match).filter(Match.user_id == user_id).count()
+
+            # Run matching
+            matches = await match_user_with_all_jobs(db, user, min_score=60.0)
+
+            # Get count after
+            matches_after = db.query(Match).filter(Match.user_id == user_id).count()
+
+            # Calculate stats
+            matches_created = matches_after - matches_before
+            matches_updated = len(matches) - matches_created
+            total_jobs = db.query(func.count(Job.id)).scalar()
+
+            result = {
+                "matches_created": matches_created,
+                "matches_updated": matches_updated,
+                "total_jobs_processed": total_jobs,
+            }
+
+            set_job_status(
+                JOB_TYPE_MATCH_REFRESH,
+                user_id,
+                status="completed",
+                message=f"Found {len(matches)} matches ({matches_created} new)",
+                result=result,
+            )
+            logger.info(f"Background match refresh completed for user {user_id}: {len(matches)} matches")
+
+    except Exception as e:
+        logger.error(f"Background match refresh failed for user {user_id}: {e}", exc_info=True)
+        set_job_status(
+            JOB_TYPE_MATCH_REFRESH,
+            user_id,
+            status="failed",
+            message=f"Match refresh failed: {str(e)}",
+        )
 
 
 @router.get("", response_model=MatchListResponse)
@@ -162,49 +246,77 @@ async def list_matches(
     )
 
 
-@router.post("/refresh", response_model=RefreshMatchesResponse)
+@router.post("/refresh")
 @limiter.limit("5/hour")  # Expensive operation - LLM calls for all jobs
 async def refresh_matches(
     request: Request,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
     """
-    Refresh matches for current user against all jobs
+    Refresh matches for current user against all jobs (async)
+
+    This endpoint returns immediately and processes in the background.
+    Use GET /api/matches/refresh/status to poll for completion.
 
     This will:
     1. Match user profile against all jobs in database
     2. Create new matches for qualifying jobs (score >= 60)
     3. Update existing matches with new scores
     """
-    try:
-        # Get count before
-        matches_before = db.query(Match).filter(Match.user_id == current_user.id).count()
+    # Check if a refresh is already in progress
+    current_status = get_job_status(JOB_TYPE_MATCH_REFRESH, current_user.id)
+    if current_status and current_status.get("status") == "processing":
+        return {
+            "status": "already_processing",
+            "message": "Match refresh is already in progress. Check status endpoint for updates.",
+        }
 
-        # Run matching
-        matches = await match_user_with_all_jobs(db, current_user, min_score=60.0)
+    # Set initial status
+    set_job_status(
+        JOB_TYPE_MATCH_REFRESH,
+        current_user.id,
+        status="pending",
+        message="Match refresh queued...",
+    )
 
-        # Get count after
-        matches_after = db.query(Match).filter(Match.user_id == current_user.id).count()
+    # Queue background task
+    background_tasks.add_task(run_match_refresh, current_user.id)
 
-        # Calculate stats
-        matches_created = matches_after - matches_before
-        matches_updated = len(matches) - matches_created
+    return {
+        "status": "processing",
+        "message": "Match refresh started. Poll /api/matches/refresh/status for updates.",
+    }
 
-        # Get total jobs processed
-        total_jobs = db.query(func.count(Job.id)).scalar()
 
-        return RefreshMatchesResponse(
-            matches_created=matches_created,
-            matches_updated=matches_updated,
-            total_jobs_processed=total_jobs,
+@router.get("/refresh/status", response_model=RefreshStatusResponse)
+async def get_refresh_status(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get status of match refresh background job
+
+    Returns current status of the most recent match refresh:
+    - **none**: No refresh has been started
+    - **pending**: Refresh is queued
+    - **processing**: Refresh is in progress
+    - **completed**: Refresh finished successfully (includes result data)
+    - **failed**: Refresh failed (includes error message)
+    """
+    job_status = get_job_status(JOB_TYPE_MATCH_REFRESH, current_user.id)
+
+    if not job_status:
+        return RefreshStatusResponse(
+            status="none",
+            message="No match refresh in progress or recently completed.",
         )
-    except Exception as e:
-        logger.error(f"Error refreshing matches for user {current_user.id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to refresh matches"
-        )
+
+    return RefreshStatusResponse(
+        status=job_status.get("status", "unknown"),
+        message=job_status.get("message", ""),
+        result=job_status.get("result"),
+        updated_at=job_status.get("updated_at"),
+    )
 
 
 @router.get("/{match_id}")

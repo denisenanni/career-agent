@@ -463,5 +463,57 @@ All migrations are version-controlled in `backend/migrations/versions/`.
 5. **v2024-12** - Added `custom_skills` table for user-contributed skills
 6. **v2024-12** - Added `cover_letter` and `cv_highlights` to matches table
 7. **v2024-12** - Added composite unique constraint on jobs (source, source_id)
-8. **v2024-11** - Added full-text search with GIN index on jobs
-9. **v2024-11** - Added composite indexes on matches for performance
+8. **v2024-12** - Added Redis job status tracking for async operations
+9. **v2024-11** - Added full-text search with GIN index on jobs
+10. **v2024-11** - Added composite indexes on matches for performance
+
+---
+
+## Redis Keys
+
+In addition to the PostgreSQL tables, the application uses Redis for caching and job status tracking.
+
+### Cache Keys
+
+| Key Pattern | Purpose | TTL |
+|-------------|---------|-----|
+| `cv_parse:{hash}` | Cached CV parsing results | 30 days |
+| `job_extract_hash:{hash}` | Cached job requirement extraction | 7 days |
+| `cover_letter:{user_id}:{job_id}` | Cached cover letter | 30 days |
+| `cv_highlights:{user_id}:{job_id}` | Cached CV highlights | 30 days |
+
+### Job Status Keys
+
+Used for tracking async background task status:
+
+| Key Pattern | Purpose | TTL |
+|-------------|---------|-----|
+| `job_status:{type}:{user_id}` | Background job status | 1 hour |
+
+**Job Status Value Format:**
+```json
+{
+  "status": "completed",
+  "message": "Found 25 matches (10 new)",
+  "updated_at": "2024-12-18T12:05:00Z",
+  "result": {
+    "matches_created": 10,
+    "matches_updated": 15,
+    "total_jobs_processed": 500
+  }
+}
+```
+
+**Status Values:**
+- `pending` - Job queued
+- `processing` - Job in progress
+- `completed` - Job finished successfully (includes `result`)
+- `failed` - Job failed (includes error in `message`)
+
+### Metrics Keys
+
+| Key | Purpose |
+|-----|---------|
+| `cache:hits:{category}` | Cache hit counter by category |
+| `cache:misses:{category}` | Cache miss counter by category |
+| `cache:sets:{category}` | Cache set counter by category |

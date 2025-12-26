@@ -376,32 +376,39 @@ class TestRefreshMatches:
         return jobs
 
     @pytest.mark.asyncio
-    async def test_refresh_matches_creates_matches(self, authenticated_client, user_with_skills, some_jobs):
-        """Test that refresh matches endpoint creates matches"""
-        from unittest.mock import patch, AsyncMock
+    async def test_refresh_matches_returns_processing_status(self, authenticated_client, user_with_skills, some_jobs):
+        """Test that refresh matches endpoint returns processing status immediately (async)"""
+        response = authenticated_client.post("/api/matches/refresh")
 
-        # Mock the matching service to return some matches
-        with patch('app.routers.matches.match_user_with_all_jobs', new_callable=AsyncMock) as mock_match:
-            mock_match.return_value = [{"job_id": 1, "score": 75.0}]
+        assert response.status_code == 200
+        data = response.json()
+
+        # Endpoint now returns immediately with processing status
+        assert data["status"] in ("processing", "already_processing")
+        assert "message" in data
+
+    def test_refresh_status_endpoint(self, authenticated_client):
+        """Test that refresh status endpoint returns current status"""
+        response = authenticated_client.get("/api/matches/refresh/status")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Status can be none (no refresh started), pending, processing, completed, or failed
+        assert "status" in data
+        assert "message" in data
+        assert data["status"] in ("none", "pending", "processing", "completed", "failed")
+
+    def test_refresh_matches_prevents_duplicate_refresh(self, authenticated_client):
+        """Test that starting refresh while one is processing returns already_processing"""
+        from unittest.mock import patch
+
+        # Mock get_job_status to return processing status
+        with patch('app.routers.matches.get_job_status') as mock_status:
+            mock_status.return_value = {"status": "processing", "message": "In progress..."}
 
             response = authenticated_client.post("/api/matches/refresh")
 
             assert response.status_code == 200
             data = response.json()
-
-            assert "matches_created" in data
-            assert "matches_updated" in data
-            assert "total_jobs_processed" in data
-
-    def test_refresh_matches_error_handling(self, authenticated_client):
-        """Test that refresh matches handles errors gracefully"""
-        from unittest.mock import patch, AsyncMock
-
-        # Mock the matching service to raise an exception
-        with patch('app.routers.matches.match_user_with_all_jobs', new_callable=AsyncMock) as mock_match:
-            mock_match.side_effect = Exception("Matching service failed")
-
-            response = authenticated_client.post("/api/matches/refresh")
-
-            assert response.status_code == 500
-            assert "Failed to refresh matches" in response.json()["detail"]
+            assert data["status"] == "already_processing"

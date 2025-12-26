@@ -3,17 +3,33 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import { MatchesPage } from '../MatchesPage'
 
 // Mock the API
 const mockFetchMatches = vi.fn()
 const mockRefreshMatches = vi.fn()
+const mockGetRefreshStatus = vi.fn()
 const mockGetProfile = vi.fn()
 
 vi.mock('../../api/matches', () => ({
   fetchMatches: (...args: unknown[]) => mockFetchMatches(...args),
   refreshMatches: () => mockRefreshMatches(),
+  getRefreshStatus: () => mockGetRefreshStatus(),
 }))
+
+// Mock react-hot-toast
+vi.mock('react-hot-toast', () => {
+  const mockToastFn = vi.fn()
+  return {
+    default: Object.assign(mockToastFn, {
+      success: vi.fn(),
+      error: vi.fn(),
+      loading: vi.fn(),
+      dismiss: vi.fn(),
+    }),
+  }
+})
 
 vi.mock('../../api/profile', () => ({
   getProfile: () => mockGetProfile(),
@@ -49,7 +65,9 @@ describe('MatchesPage', () => {
       email: 'test@example.com',
       cv_uploaded_at: null,
     })
-    mockRefreshMatches.mockResolvedValue({ matches_created: 5, matches_updated: 3 })
+    // New async response format
+    mockRefreshMatches.mockResolvedValue({ status: 'processing', message: 'Match refresh started' })
+    mockGetRefreshStatus.mockResolvedValue({ status: 'none', message: 'No refresh in progress' })
   })
 
   it('shows Refresh Matches button for admin users', () => {
@@ -248,7 +266,7 @@ describe('MatchesPage', () => {
       })
     })
 
-    it('shows success message after refresh', async () => {
+    it('shows loading toast when refresh starts', async () => {
       mockUseAuth.mockReturnValue({
         user: { id: 1, email: 'admin@example.com', is_admin: true, skills: [], preferences: {} },
         loading: false,
@@ -263,7 +281,7 @@ describe('MatchesPage', () => {
       })
 
       await waitFor(() => {
-        expect(screen.getByText(/matches refreshed/i)).toBeInTheDocument()
+        expect(toast.loading).toHaveBeenCalledWith('Refreshing matches...', { id: 'refresh-matches' })
       })
     })
   })
