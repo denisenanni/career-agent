@@ -94,22 +94,37 @@ async def list_jobs(
     if min_salary:
         query = query.filter(Job.salary_min >= min_salary)
     if search:
-        # Use PostgreSQL full-text search (much faster than ILIKE)
-        # plainto_tsquery safely converts plain text to tsquery format
-        query = query.filter(
-            text("search_vector @@ plainto_tsquery('english', :search)")
-        ).params(search=search)
+        # Use PostgreSQL full-text search with prefix matching
+        # Add :* to each word to enable prefix matching (e.g., "pytho" matches "python")
+        # Split search into words, sanitize, and add prefix operator
+        search_words = search.strip().split()
+        if search_words:
+            # Sanitize each word (remove special chars that could break tsquery) and add :*
+            sanitized_words = []
+            for word in search_words:
+                # Keep only alphanumeric chars
+                clean_word = ''.join(c for c in word if c.isalnum())
+                if clean_word:
+                    sanitized_words.append(f"{clean_word}:*")
+
+            if sanitized_words:
+                # Join with & for AND matching (all words must match)
+                tsquery = " & ".join(sanitized_words)
+                query = query.filter(
+                    text("search_vector @@ to_tsquery('english', :search)")
+                ).params(search=tsquery)
     if skills:
-        # Filter by skills (case-insensitive match in tags JSON array)
+        # Filter by skills (case-insensitive partial match in tags JSON array)
         skill_list = [s.strip().lower() for s in skills.split(",") if s.strip()]
         if skill_list:
-            # Use PostgreSQL JSON array containment with case-insensitive matching
-            # Check if any of the provided skills match any tag in the job
+            # Use PostgreSQL JSON array containment with case-insensitive partial matching
+            # Check if any of the provided skills partially match any tag in the job
             skill_conditions = " OR ".join([
-                f"EXISTS (SELECT 1 FROM json_array_elements_text(tags::json) AS tag WHERE lower(tag) = :skill_{i})"
+                f"EXISTS (SELECT 1 FROM json_array_elements_text(tags::json) AS tag WHERE lower(tag) LIKE :skill_{i})"
                 for i in range(len(skill_list))
             ])
-            params = {f"skill_{i}": skill for i, skill in enumerate(skill_list)}
+            # Add wildcards for partial matching
+            params = {f"skill_{i}": f"%{skill}%" for i, skill in enumerate(skill_list)}
             query = query.filter(
                 text(f"tags IS NOT NULL AND ({skill_conditions})")
             ).params(**params)

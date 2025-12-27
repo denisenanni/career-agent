@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from collections import Counter
 from app.models import Job, User, SkillAnalysis
+from app.models.custom_skill import CustomSkill
 from app.services.llm import extract_job_requirements
 from app.utils.skill_aliases import normalize_skill
 from app.services.matching import infer_career_category, CAREER_CATEGORIES
@@ -93,6 +94,44 @@ CATEGORY_LABELS = {
     "motion": "Motion Graphics & Animation",
     "game": "Game Development",
 }
+
+
+def ensure_skills_exist_in_db(db: Session, skills: List[str]) -> None:
+    """
+    Ensure skills exist in the custom_skills table so users can find them
+    when searching for skills to add to their profile.
+
+    Args:
+        db: Database session
+        skills: List of skill names to ensure exist
+    """
+    if not skills:
+        return
+
+    for skill_name in skills:
+        if not skill_name or not skill_name.strip():
+            continue
+
+        skill_name = skill_name.strip()
+
+        # Check if skill already exists (case-insensitive)
+        existing = db.query(CustomSkill).filter(
+            func.lower(CustomSkill.skill) == skill_name.lower()
+        ).first()
+
+        if not existing:
+            # Create new skill with usage_count=0 to indicate it's system-added
+            # (not user-added), will be incremented when users actually add it
+            new_skill = CustomSkill(skill=skill_name, usage_count=0)
+            db.add(new_skill)
+            logger.debug(f"Added insight skill to custom_skills: {skill_name}")
+
+    try:
+        db.commit()
+        logger.info(f"Ensured {len(skills)} skills exist in custom_skills table")
+    except Exception as e:
+        logger.error(f"Failed to save insight skills: {e}")
+        db.rollback()
 
 
 def get_related_skills_for_user(user_skills: List[str]) -> Dict[str, Dict[str, Any]]:
@@ -263,7 +302,8 @@ def generate_skill_recommendations(
     user: User,
     market_skills: Dict[str, Dict[str, Any]],
     skill_gaps: List[str],
-    top_n: int = 10
+    top_n: int = 10,
+    db: Session = None
 ) -> List[Dict[str, Any]]:
     """
     Generate prioritized skill recommendations for user.
@@ -277,6 +317,7 @@ def generate_skill_recommendations(
         market_skills: Market skill data
         skill_gaps: Skills user is missing (market-wide)
         top_n: Number of top recommendations to return
+        db: Database session (optional, used to save recommended skills to custom_skills)
 
     Returns:
         List of recommendations, each with:
@@ -356,7 +397,15 @@ def generate_skill_recommendations(
     priority_order = {"high": 0, "medium": 1, "low": 2}
     recommendations.sort(key=lambda x: (priority_order[x["priority"]], -x["frequency"]))
 
-    return recommendations[:top_n]
+    final_recommendations = recommendations[:top_n]
+
+    # Save recommended skills to custom_skills table so users can find them
+    # when searching for skills to add to their profile
+    if db and final_recommendations:
+        skill_names = [rec["skill"] for rec in final_recommendations]
+        ensure_skills_exist_in_db(db, skill_names)
+
+    return final_recommendations
 
 
 def estimate_learning_effort(skill: str, user_skills: set) -> str:
@@ -494,8 +543,8 @@ def run_skill_analysis_for_user(db: Session, user: User) -> SkillAnalysis:
     # Identify gaps
     skill_gaps = identify_skill_gaps(user.skills or [], market_skills, min_frequency=5.0)
 
-    # Generate recommendations
-    recommendations = generate_skill_recommendations(user, market_skills, skill_gaps, top_n=10)
+    # Generate recommendations (also saves recommended skills to custom_skills table)
+    recommendations = generate_skill_recommendations(user, market_skills, skill_gaps, top_n=10, db=db)
 
     # Get job count
     jobs_analyzed = db.query(func.count(Job.id)).scalar()

@@ -112,3 +112,31 @@ Returns top N (default 200, max 500)
 - `backend/app/routers/skills.py` - Added `search` parameter
 - `frontend/src/api/skills.ts` - Added `search` param to `getPopularSkills()`
 - `frontend/src/components/SkillAutocompleteModal.tsx` - Debounced API search on typing
+
+### Partial Matching in Jobs Search and Filter (Dec 2025)
+
+**Problem:** Both the main search box and skill filter required exact/complete word matches. Searching for "pytho" would find no jobs, but "python" would work.
+
+**Solution:**
+1. **Main search**: Changed from `plainto_tsquery` to `to_tsquery` with `:*` prefix operator
+   - "pytho" becomes `pytho:*` which matches words starting with "pytho"
+   - Multiple words use AND matching (all must match)
+   - Input sanitized to prevent tsquery syntax errors
+
+2. **Skill filter**: Changed from exact match to LIKE matching
+   - `lower(tag) = :skill` became `lower(tag) LIKE :skill` with `%` wildcards
+
+**Files changed:**
+- `backend/app/routers/jobs.py` - Updated both search and skill filter logic
+
+### Insight Skills Saved to Custom Skills (Dec 2025)
+
+**Problem:** Skills recommended by the insights system (e.g., "responsive design" from `SKILL_PATHS`) weren't saved to the `custom_skills` table, so users couldn't find them when searching for skills to add to their profile.
+
+**Solution:** Added `ensure_skills_exist_in_db()` function that saves recommended skills to `custom_skills` table when generating recommendations:
+- Skills are saved with `usage_count=0` to indicate they're system-added
+- When users actually add the skill, the count increments normally
+- This makes insight-recommended skills discoverable in the skill autocomplete
+
+**Files changed:**
+- `backend/app/services/insights.py` - Added `ensure_skills_exist_in_db()` function and integrated it into `generate_skill_recommendations()`
